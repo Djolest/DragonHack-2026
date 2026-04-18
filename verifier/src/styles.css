@@ -1,0 +1,251 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap");
+
+:root {
+  color-scheme: light;
+  --bg: #f6efe3;
+  --bg-strong: #e8dcc7;
+  --panel: rgba(255, 252, 246, 0.84);
+  --panel-strong: rgba(18, 34, 28, 0.92);
+  --ink: #18211d;
+  --ink-soft: #4a554f;
+  --accent: #0d5c46;
+  --accent-soft: #b58d3d;
+  --danger: #9e3b2f;
+  --shadow: 0 24px 60px rgba(46, 35, 18, 0.15);
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top right, rgba(181, 141, 61, 0.26), transparent 28%),
+    radial-gradient(circle at left center, rgba(13, 92, 70, 0.2), transparent 24%),
+    linear-gradient(180deg, #fff7ea 0%, var(--bg) 100%);
+}
+
+a {
+  color: var(--accent);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  width: min(1180px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 28px 0 48px;
+}
+
+.hero-card,
+.panel {
+  border: 1px solid rgba(24, 33, 29, 0.08);
+  border-radius: 28px;
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow);
+}
+
+.hero-card {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  padding: 30px;
+  background:
+    linear-gradient(135deg, rgba(255, 252, 246, 0.96), rgba(244, 233, 210, 0.9)),
+    linear-gradient(160deg, rgba(13, 92, 70, 0.12), rgba(181, 141, 61, 0.12));
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.78rem;
+  color: var(--accent);
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 14px;
+  font-size: clamp(2.4rem, 5vw, 4.3rem);
+  line-height: 0.95;
+}
+
+h2 {
+  margin-bottom: 6px;
+  font-size: 1.25rem;
+}
+
+.hero-copy,
+.panel-header p {
+  color: var(--ink-soft);
+}
+
+.hero-status {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 50px;
+  padding: 0 16px;
+  border-radius: 999px;
+  color: #f7f2e8;
+  background: var(--panel-strong);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.86rem;
+}
+
+.grid,
+.results-grid {
+  display: grid;
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.results-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.panel {
+  padding: 24px;
+  background: var(--panel);
+}
+
+.panel-header {
+  margin-bottom: 16px;
+}
+
+label {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+label span {
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid rgba(24, 33, 29, 0.12);
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+}
+
+textarea,
+pre,
+dd {
+  font-family: "IBM Plex Mono", monospace;
+}
+
+button {
+  border: 0;
+  border-radius: 999px;
+  padding: 14px 20px;
+  font-weight: 700;
+  color: #f7f2e8;
+  background: linear-gradient(135deg, var(--accent), #083628);
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.stats-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.stats-list div {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.64);
+}
+
+dt {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+dd {
+  margin: 8px 0 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.good {
+  color: var(--accent);
+}
+
+.warn {
+  color: var(--danger);
+}
+
+.message-panel pre {
+  overflow: auto;
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(24, 33, 29, 0.06);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.error-banner {
+  margin-top: 18px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  color: #fff7ea;
+  background: linear-gradient(135deg, #ab4733, #8b3424);
+  box-shadow: var(--shadow);
+}
+
+@media (max-width: 860px) {
+  .hero-card,
+  .grid,
+  .results-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell {
+    width: min(100vw - 20px, 1180px);
+    padding-top: 18px;
+  }
+
+  .hero-card,
+  .panel {
+    border-radius: 22px;
+  }
+}

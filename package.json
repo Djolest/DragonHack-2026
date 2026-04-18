@@ -1,0 +1,20 @@
+{
+  "name": "oakproof-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "contracts",
+    "verifier"
+  ],
+  "scripts": {
+    "dev:verifier": "npm run dev --workspace verifier",
+    "build:verifier": "npm run build --workspace verifier",
+    "lint:verifier": "npm run lint --workspace verifier",
+    "compile:contracts": "npm run compile --workspace contracts",
+    "test:contracts": "npm run test --workspace contracts",
+    "deploy:contracts:coston2": "npm run deploy:coston2 --workspace contracts"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

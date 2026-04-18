@@ -1,0 +1,19 @@
+{
+  "name": "@oakproof/contracts",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "clean": "hardhat clean",
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:coston2": "hardhat run scripts/deploy.ts --network coston2"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@types/node": "^22.10.1",
+    "dotenv": "^16.4.7",
+    "hardhat": "^2.22.15",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  }
+}

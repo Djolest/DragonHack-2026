@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "oakproof-capture"
+version = "0.1.0"
+description = "OAKProof Luxonis OAK4 proof-capture station service."
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "depthai",
+  "eth-account>=0.13.0,<1.0.0",
+  "fastapi>=0.115.0,<1.0.0",
+  "httpx>=0.27.0,<1.0.0",
+  "numpy>=1.26.0,<3.0.0",
+  "opencv-python>=4.10.0,<5.0.0",
+  "pydantic-settings>=2.6.0,<3.0.0",
+  "uvicorn[standard]>=0.30.0,<1.0.0"
+]
+
+[project.scripts]
+oak4-rgbd-viewer = "app.oak4_rgbd_viewer:main"
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.11.0,<2.0.0",
+  "pytest>=8.3.0,<9.0.0",
+  "ruff>=0.6.0,<1.0.0"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

@@ -1,0 +1,30 @@
+{
+  "roi": {
+    "width_fraction": 0.34,
+    "height_fraction": 0.46
+  },
+  "depth": {
+    "min_depth_mm": 120,
+    "max_depth_mm": 1600,
+    "min_valid_depth_ratio": 0.32,
+    "poor_depth_ratio": 0.14
+  },
+  "motion": {
+    "min_valid_frames_for_pass": 8,
+    "min_valid_frames_for_summary": 8,
+    "min_forward_motion_mm": 80.0
+  },
+  "planarity": {
+    "plane_fit_min_points": 600,
+    "max_plane_fit_points": 3000,
+    "max_plane_fit_rms_mm": 12.0,
+    "max_depth_std_mm": 28.0,
+    "elevated_frame_ratio": 0.72,
+    "min_valid_frames_for_risk": 10
+  },
+  "quality": {
+    "poor_depth_frame_ratio_for_inconclusive": 0.55,
+    "history_size": 240,
+    "recent_series_length": 40
+  }
+}
