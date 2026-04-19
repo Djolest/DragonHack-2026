@@ -8,6 +8,7 @@ import {
   anchorReceipt,
   fetchBackendHealth,
   fetchReceipt,
+  ingestReceipt,
   fetchTransactionProof,
   fetchVerification
 } from "./lib/api";
@@ -271,6 +272,50 @@ export default function App() {
     }
   }
 
+  async function handleCaptureAnchor(receiptUrl: string) {
+    setActiveAction("anchor");
+    setError(null);
+
+    try {
+      const receiptResponse = await fetch(receiptUrl);
+      if (!receiptResponse.ok) {
+        const body = await receiptResponse.text();
+        throw new Error(body || `Failed to load the local receipt with status ${receiptResponse.status}.`);
+      }
+
+      const receiptEnvelope = parseReceiptEnvelope(await receiptResponse.text());
+      const ingestedRecord = await ingestReceipt(backendUrl, receiptEnvelope);
+      let anchorTxHash: string | null = null;
+
+      if (backendHealth?.anchoringMode === "manual" && backendHealth.manualAnchorAvailable === true) {
+        const anchorResult = await anchorReceipt(backendUrl, ingestedRecord.receipt_id);
+        anchorTxHash = anchorResult.tx_hash;
+      }
+
+      const [nextRecord, nextBackendVerification] = await Promise.all([
+        fetchReceipt(backendUrl, ingestedRecord.receipt_id),
+        fetchVerification(backendUrl, ingestedRecord.receipt_id)
+      ]);
+
+      setReceiptId(ingestedRecord.receipt_id);
+      setActiveReceipt(ingestedRecord.receipt);
+      setReceiptText(prettyJson(ingestedRecord.receipt));
+      setRecord(nextRecord);
+      setBackendVerification(nextBackendVerification);
+      setTransactionProof(null);
+      if (anchorTxHash ?? nextBackendVerification.anchor_tx_hash) {
+        setTransactionHash(anchorTxHash ?? nextBackendVerification.anchor_tx_hash ?? "");
+      }
+      await runVerification(ingestedRecord.receipt);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error ? caughtError.message : "Failed to ingest and anchor the local receipt."
+      );
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
   const signatureHealthy =
     Boolean(verification?.signatureValid) &&
     verification?.payloadHash === (record?.receipt_hash ?? verification?.payloadHash);
@@ -282,6 +327,8 @@ export default function App() {
     backendHealth.manualAnchorAvailable === true &&
     (backendVerification?.anchored === false || record?.anchored === false) &&
     Boolean(record?.receipt_id ?? backendVerification?.receipt_id ?? receiptId.trim());
+  const recordTabAnchorReceiptId = record?.receipt_id ?? backendVerification?.receipt_id ?? null;
+  const recordTabAnchorUrl = firstDefined(record?.anchor_tx_url, backendVerification?.anchor_tx_url);
   const hasProofData = Boolean(
     receiptId ||
       receiptText.trim() ||
@@ -448,6 +495,11 @@ export default function App() {
           {activeTab === "record" ? (
             <RecordTab
               captureUrl={captureUrl}
+              backendManualAnchorAvailable={backendHealth?.manualAnchorAvailable === true}
+              manualAnchorActive={activeAction === "anchor"}
+              manualAnchorReceiptId={recordTabAnchorReceiptId}
+              manualAnchorUrl={recordTabAnchorUrl}
+              onAnchorReceipt={handleCaptureAnchor}
               onOpenProofCard={() => setIsProofCardOpen(true)}
               onReceiptIdReady={setReceiptId}
             />

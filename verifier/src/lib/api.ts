@@ -2,6 +2,7 @@ import type {
   AnchorResult,
   BackendHealth,
   ReceiptRecord,
+  SignedReceiptEnvelope,
   TransactionProofResult,
   VerificationResult
 } from "../types";
@@ -27,6 +28,17 @@ export async function fetchReceipt(baseUrl: string, receiptId: string): Promise<
   return requestJson<ReceiptRecord>(
     `${normalizeBaseUrl(baseUrl)}/api/v1/receipts/${encodeURIComponent(receiptId)}`
   );
+}
+
+export async function ingestReceipt(
+  baseUrl: string,
+  receipt: SignedReceiptEnvelope
+): Promise<ReceiptRecord> {
+  return requestJson<ReceiptRecord>(`${normalizeBaseUrl(baseUrl)}/api/v1/receipts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(receipt)
+  });
 }
 
 export async function fetchVerification(

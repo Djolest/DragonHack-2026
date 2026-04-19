@@ -222,7 +222,7 @@ def test_challenge_elapsed_uses_previous_timestamp_delta() -> None:
     assert decision.live_state.current_challenge.elapsed_seconds == pytest.approx(1.75)
 
 
-def test_overall_status_requires_enough_analyzable_evidence() -> None:
+def test_overall_status_ignores_soft_inconclusive_gates_after_a_passed_challenge() -> None:
     verifier = RealnessVerifier(config=build_config(min_analyzable_frames=5), seed="analyzable")
     verifier.total_frames = 5
     verifier.recorded_frames = 5
@@ -236,8 +236,8 @@ def test_overall_status_requires_enough_analyzable_evidence() -> None:
     assert summary["scene_checks"]["plane_like"]["status"] == "passed"
     assert summary["scene_checks"]["depth_variance"]["status"] == "passed"
     assert summary["scene_checks"]["too_close"]["status"] == "passed"
-    assert summary["overall_status"] == "inconclusive"
-    assert "analyzable depth evidence" in summary["status_reason"].lower()
+    assert summary["overall_status"] == "verified"
+    assert "hard failure gates" in summary["status_reason"].lower()
 
 
 def test_overall_status_requires_zero_failed_challenges() -> None:

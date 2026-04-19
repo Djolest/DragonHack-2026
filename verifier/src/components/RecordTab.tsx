@@ -60,6 +60,11 @@ function sessionStateLabel(session: CaptureSessionStatus | null): string {
 
 interface RecordTabProps {
   captureUrl: string;
+  backendManualAnchorAvailable: boolean;
+  manualAnchorActive: boolean;
+  manualAnchorReceiptId: string | null;
+  manualAnchorUrl: string | null;
+  onAnchorReceipt: (receiptUrl: string) => void;
   onOpenProofCard: () => void;
   onReceiptIdReady: (receiptId: string) => void;
 }
@@ -72,7 +77,16 @@ const RGB_SNAPSHOT_IDLE_DELAY_MS = 1600;
 const DEPTH_PREVIEW_WIDTH = 360;
 const DEPTH_PREVIEW_QUALITY = 55;
 
-export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: RecordTabProps) {
+export function RecordTab({
+  captureUrl,
+  backendManualAnchorAvailable,
+  manualAnchorActive,
+  manualAnchorReceiptId,
+  manualAnchorUrl,
+  onAnchorReceipt,
+  onOpenProofCard,
+  onReceiptIdReady
+}: RecordTabProps) {
   const [assetId, setAssetId] = useState("demo-batch-001");
   const [operatorId, setOperatorId] = useState("");
   const [notes, setNotes] = useState("Hackathon station capture");
@@ -164,7 +178,7 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
   }, [captureUrl, onReceiptIdReady, session?.session_id, sessionActive]);
 
   useEffect(() => {
-    if (!session?.session_id || rgbPreviewMode !== "snapshot") {
+    if (!session?.session_id || rgbPreviewMode !== "snapshot" || !sessionActive) {
       return;
     }
 
@@ -300,6 +314,14 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
   const currentPrompt =
     firstDefined(liveState?.prompt, liveState?.current_challenge?.prompt, receiptWorkflow?.reason) ?? "Ready to start a station session.";
   const currentPauseReason = firstDefined(liveState?.recording_pause_reason, liveState?.warning, session?.error);
+  const resolvedAnchorUrl =
+    currentReceiptId && manualAnchorReceiptId === currentReceiptId
+      ? firstDefined(currentAnchorUrl, manualAnchorUrl)
+      : currentAnchorUrl;
+  const canAnchorRecordedReceipt =
+    backendManualAnchorAvailable &&
+    Boolean(receiptUrl && currentReceiptId) &&
+    !resolvedAnchorUrl;
 
   return (
     <div className="tab-stack">
@@ -483,8 +505,22 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
             <button type="button" className="secondary-button" onClick={onOpenProofCard}>
               Proof card
             </button>
-            {currentAnchorUrl ? (
-              <a className="secondary-link" href={currentAnchorUrl} target="_blank" rel="noreferrer">
+            {canAnchorRecordedReceipt ? (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  if (receiptUrl) {
+                    onAnchorReceipt(receiptUrl);
+                  }
+                }}
+                disabled={manualAnchorActive}
+              >
+                {manualAnchorActive ? "Anchoring..." : "Anchor now"}
+              </button>
+            ) : null}
+            {resolvedAnchorUrl ? (
+              <a className="secondary-link" href={resolvedAnchorUrl} target="_blank" rel="noreferrer">
                 Anchor link
               </a>
             ) : (
