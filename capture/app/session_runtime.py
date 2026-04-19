@@ -22,6 +22,7 @@ from .storage import LocalStorage, SessionStoragePaths
 
 
 FrameObserver = Callable[[SyncedFrame, LiveSessionState, DeviceSummary], bool | None]
+FrameObserverFactory = Callable[[str], FrameObserver | None]
 FrameSourceFactory = Callable[[bool, str], FrameSource]
 
 
@@ -158,11 +159,13 @@ class CaptureSessionRuntime:
             self._postprocessed = True
 
     def _run(self) -> None:
-        frame_source = self.frame_source_factory(self.simulate, self.session_id)
+        frame_source: FrameSource | None = None
         video_writer: cv2.VideoWriter | None = None
+        terminal_error: Exception | None = None
         nominal_frame_interval_seconds = 1.0 / max(1.0, self.runtime_fps)
         previous_frame_timestamp_seconds: float | None = None
         try:
+            frame_source = self.frame_source_factory(self.simulate, self.session_id)
             device_summary = frame_source.open()
             with self._lock:
                 self.device_summary = device_summary
@@ -212,15 +215,28 @@ class CaptureSessionRuntime:
             with self._lock:
                 self.state = "stopping"
         except Exception as exc:  # pragma: no cover - covered indirectly via API/service tests
+            terminal_error = exc
+        finally:
+            if video_writer is not None:
+                try:
+                    video_writer.release()
+                except Exception as exc:  # pragma: no cover - defensive cleanup guard
+                    if terminal_error is None:
+                        terminal_error = exc
+            if frame_source is not None:
+                try:
+                    frame_source.close()
+                except Exception as exc:  # pragma: no cover - defensive cleanup guard
+                    if terminal_error is None:
+                        terminal_error = exc
+
+        if terminal_error is not None:
             with self._lock:
-                self.error = str(exc)
+                self.error = str(terminal_error)
+                self.stopped_at = datetime.now(timezone.utc)
                 self.state = "failed"
             self._started_event.set()
             return
-        finally:
-            if video_writer is not None:
-                video_writer.release()
-            frame_source.close()
 
         proof_summary = self._verifier.build_summary(
             device_info=self.device_summary.to_dict() if self.device_summary else {"name": "unknown"},
@@ -276,7 +292,7 @@ class CaptureSessionManager:
         runtime_config: Oak4RuntimeConfig,
         oak_device_id: str | None,
         frame_source_factory: FrameSourceFactory | None = None,
-        observer_factory: Callable[[], FrameObserver | None] | None = None,
+        observer_factory: FrameObserverFactory | None = None,
     ) -> None:
         self.storage = storage
         self.verification_config = verification_config
@@ -302,7 +318,7 @@ class CaptureSessionManager:
                 raise RuntimeError("Only one capture session can run at a time on this station.")
 
             session_id = str(uuid4())
-            observer = self.observer_factory() if self.observer_factory is not None else None
+            observer = self.observer_factory(session_id) if self.observer_factory is not None else None
             session = CaptureSessionRuntime(
                 session_id=session_id,
                 asset_id=asset_id,

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from app.depth_challenge import RealnessVerifier, VerificationConfig
+from app.depth_challenge import ActiveChallenge, RealnessVerifier, RoiBox, VerificationConfig
 
 
 FRAME_HEIGHT = 120
@@ -186,6 +187,76 @@ def test_challenge_pauses_recording_until_completed_and_then_reschedules() -> No
         recording_frame_interval_seconds=1.0,
     )
     assert next_state.live_state.current_challenge is None
+
+
+def test_challenge_elapsed_uses_previous_timestamp_delta() -> None:
+    verifier = RealnessVerifier(
+        config=build_config(
+            workflow_confirmation_frames=1,
+            challenge_timeout_seconds=30.0,
+        ),
+        seed="timestamp-delta",
+    )
+    verifier.workflow_stage = "challenge"
+    verifier.active_challenge = ActiveChallenge(
+        challenge_id=1,
+        roi=RoiBox(x0=40, y0=30, x1=80, y1=70),
+        issued_at_seconds=0.0,
+    )
+    verifier.next_challenge_time_seconds = 999.0
+
+    verifier.update(
+        timestamp_seconds=5.0,
+        depth_frame=non_planar_depth(980.0),
+        rgb_frame_shape=RGB_FRAME_SHAPE,
+        recording_frame_interval_seconds=1.0,
+    )
+    decision = verifier.update(
+        timestamp_seconds=6.75,
+        depth_frame=non_planar_depth(980.0),
+        rgb_frame_shape=RGB_FRAME_SHAPE,
+        recording_frame_interval_seconds=1.0,
+    )
+
+    assert decision.live_state.current_challenge is not None
+    assert decision.live_state.current_challenge.elapsed_seconds == pytest.approx(1.75)
+
+
+def test_overall_status_requires_enough_analyzable_evidence() -> None:
+    verifier = RealnessVerifier(config=build_config(min_analyzable_frames=5), seed="analyzable")
+    verifier.total_frames = 5
+    verifier.recorded_frames = 5
+    verifier.analyzable_frames = 4
+    verifier.flat_scene_evaluable_frames = 5
+    verifier.depth_spreads_mm = [160.0] * 5
+    verifier.passed_challenges = 1
+
+    summary = verifier.build_summary(device_info={"name": "sim"})
+
+    assert summary["scene_checks"]["plane_like"]["status"] == "passed"
+    assert summary["scene_checks"]["depth_variance"]["status"] == "passed"
+    assert summary["scene_checks"]["too_close"]["status"] == "passed"
+    assert summary["overall_status"] == "inconclusive"
+    assert "analyzable depth evidence" in summary["status_reason"].lower()
+
+
+def test_overall_status_requires_zero_failed_challenges() -> None:
+    verifier = RealnessVerifier(config=build_config(min_analyzable_frames=5), seed="failed-challenge")
+    verifier.total_frames = 5
+    verifier.recorded_frames = 5
+    verifier.analyzable_frames = 5
+    verifier.flat_scene_evaluable_frames = 5
+    verifier.depth_spreads_mm = [160.0] * 5
+    verifier.passed_challenges = 1
+    verifier.failed_challenges = 1
+
+    summary = verifier.build_summary(device_info={"name": "sim"})
+
+    assert summary["scene_checks"]["plane_like"]["status"] == "passed"
+    assert summary["scene_checks"]["depth_variance"]["status"] == "passed"
+    assert summary["scene_checks"]["too_close"]["status"] == "passed"
+    assert summary["overall_status"] == "failed"
+    assert "anti-replay challenge" in summary["status_reason"].lower()
 
 
 def test_recording_ignores_brief_depth_variance_wobble() -> None:

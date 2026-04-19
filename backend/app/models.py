@@ -64,6 +64,7 @@ class VerificationResult(BaseModel):
 class TransactionProofResult(BaseModel):
     tx_hash: str
     proof_type: Literal["anchor_contract", "legacy_signed_payload"]
+    decoded: bool
     proof_valid: bool
     chain_id: int | None = None
     block_number: int | None = None

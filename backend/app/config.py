@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     flare_explorer_base_url: str = "https://coston2-explorer.flare.network"
     anchor_contract_address: str = ""
     anchor_private_key: str | None = None
-    anchor_on_ingest: bool = True
+    anchor_on_ingest: bool = False
     anchor_gas_limit: int = 350_000
     anchor_timeout_seconds: int = 180
 

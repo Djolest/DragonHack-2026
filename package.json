@@ -7,6 +7,7 @@
     "verifier"
   ],
   "scripts": {
+    "demo": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo.ps1",
     "dev:verifier": "npm run dev --workspace verifier",
     "build:verifier": "npm run build --workspace verifier",
     "lint:verifier": "npm run lint --workspace verifier",

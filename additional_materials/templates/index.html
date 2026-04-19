@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.tailwindcss.com"></script>
+
+<title>Not That Deep</title>
+
+<style>
+body {
+    background: radial-gradient(circle at top, #0f172a, #020617);
+}
+.glass {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+.btn { padding:10px 14px; border-radius:10px; background:#334155; }
+.btn:hover { background:#475569; }
+.btn-green { background:#22c55e; padding:10px 14px; border-radius:10px;}
+.btn-red { background:#ef4444; padding:10px 14px; border-radius:10px;}
+</style>
+</head>
+
+<body class="text-white min-h-screen p-6">
+
+<div class="max-w-5xl mx-auto">
+
+<h1 class="text-5xl font-bold mb-2">Not That Deep</h1>
+<p class="text-slate-400 mb-8">Video provenance without uploads.</p>
+
+<div class="flex gap-4 mb-6">
+<button onclick="show('rec')" class="btn">Record</button>
+<button onclick="show('ver')" class="btn">Verify</button>
+</div>
+
+<!-- RECORD -->
+<div id="rec" class="glass p-6 rounded-2xl">
+
+<div class="grid md:grid-cols-2 gap-6">
+
+<div>
+<video id="video" autoplay playsinline muted class="rounded-xl w-full"></video>
+</div>
+
+<div class="flex flex-col justify-between">
+
+<div class="flex gap-2">
+<button onclick="start()" class="btn-green">Start</button>
+<button onclick="stop()" class="btn-red">Stop</button>
+</div>
+
+<p class="mt-4 text-sm text-slate-400">TX:</p>
+<p id="txOut" class="break-all text-blue-400"></p>
+<p id="recordSigner" class="mt-2 text-xs text-slate-400 break-all"></p>
+
+</div>
+</div>
+</div>
+
+<!-- VERIFY -->
+<div id="ver" class="glass p-6 rounded-2xl hidden mt-6">
+
+<input type="file" id="file" class="mb-3 w-full">
+<input type="text" id="tx" placeholder="TX id" class="w-full p-2 text-black rounded mb-3">
+
+<button onclick="verify()" class="btn w-full">Verify</button>
+
+<p id="result" class="mt-4 text-xl"></p>
+<pre id="proofOut" class="mt-4 text-sm text-slate-300 whitespace-pre-wrap break-all"></pre>
+
+</div>
+
+</div>
+
+<script>
+let recorder, chunks = [], stream, lastBlob;
+
+// ---------------- CAMERA ----------------
+async function init() {
+    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = stream;
+
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.onstop = process;
+}
+
+// ---------------- RECORD ----------------
+function start() {
+    chunks = [];
+    recorder.start();
+}
+
+function stop() {
+    recorder.stop();
+}
+
+// ---------------- PROCESS ----------------
+async function process() {
+    const blob = new Blob(chunks, { type: "video/webm" });
+    lastBlob = blob;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `not-that-deep-${Date.now()}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    const buffer = await blob.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+    const hash = Array.from(new Uint8Array(hashBuffer))
+        .map(b => b.toString(16).padStart(2, "0"))
+        .join("");
+
+    const res = await fetch("/record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hash })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+        txOut.innerText = data.error || "Failed to save recording.";
+        recordSigner.innerText = "";
+        return;
+    }
+
+    txOut.innerText = data.tx;
+    recordSigner.innerText = `Signer address: ${data.address}\nPublic key: ${data.public_key}`;
+}
+
+// ---------------- VERIFY ----------------
+async function verify() {
+    const file = document.getElementById("file").files[0];
+    const tx = document.getElementById("tx").value.trim();
+
+    if (!file) {
+        result.innerText = "Select a video file first.";
+        proofOut.innerText = "";
+        return;
+    }
+
+    if (!tx) {
+        result.innerText = "Enter a transaction hash first.";
+        proofOut.innerText = "";
+        return;
+    }
+
+    try {
+        const buffer = await file.arrayBuffer();
+        const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+        const localHash = Array.from(new Uint8Array(hashBuffer))
+            .map(b => b.toString(16).padStart(2, "0"))
+            .join("");
+
+        const res = await fetch("/tx/" + tx);
+        const raw = await res.text();
+        let data = {};
+
+        try {
+            data = raw ? JSON.parse(raw) : {};
+        } catch {
+            data = { error: raw || "Server returned an invalid response." };
+        }
+
+        if (!res.ok) {
+            result.innerText = data.error || "Failed to verify transaction.";
+            proofOut.innerText = "";
+            return;
+        }
+
+        const hashMatches = localHash === data.hash;
+        const proofValid = Boolean(data.proof_valid);
+
+        if (hashMatches && proofValid) {
+            result.innerText = "Verified: hash matches and signature is valid.";
+        } else if (!hashMatches && proofValid) {
+            result.innerText = "Signature is valid, but this file does not match the stored hash.";
+        } else {
+            result.innerText = "Stored proof is invalid.";
+        }
+
+        proofOut.innerText =
+            `Stored hash: ${data.hash}\n` +
+            `Signature valid: ${data.signature_valid}\n` +
+            `Public key matches address: ${data.public_key_matches}\n` +
+            `Stored address: ${data.address}\n` +
+            `Recovered address: ${data.recovered_address}\n` +
+            `Public key: ${data.public_key}\n` +
+            `Signature: ${data.signature}`;
+    } catch (error) {
+        result.innerText = "Verification failed. Check the tx hash and backend connection.";
+        proofOut.innerText = "";
+        console.error(error);
+    }
+}
+
+// ---------------- UI ----------------
+function show(id) {
+    rec.classList.add("hidden");
+    ver.classList.add("hidden");
+    document.getElementById(id).classList.remove("hidden");
+}
+
+document.addEventListener("DOMContentLoaded", init);
+</script>
+
+</body>
+</html>

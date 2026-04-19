@@ -1,16 +1,26 @@
-import type { ReceiptRecord, TransactionProofResult, VerificationResult } from "../types";
+import type {
+  AnchorResult,
+  BackendHealth,
+  ReceiptRecord,
+  TransactionProofResult,
+  VerificationResult
+} from "../types";
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, "");
 }
 
-async function requestJson<T>(input: string): Promise<T> {
-  const response = await fetch(input);
+async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(input, init);
   if (!response.ok) {
     const body = await response.text();
     throw new Error(body || `Request failed with status ${response.status}`);
   }
   return (await response.json()) as T;
+}
+
+export async function fetchBackendHealth(baseUrl: string): Promise<BackendHealth> {
+  return requestJson<BackendHealth>(`${normalizeBaseUrl(baseUrl)}/health`);
 }
 
 export async function fetchReceipt(baseUrl: string, receiptId: string): Promise<ReceiptRecord> {
@@ -25,6 +35,15 @@ export async function fetchVerification(
 ): Promise<VerificationResult> {
   return requestJson<VerificationResult>(
     `${normalizeBaseUrl(baseUrl)}/api/v1/receipts/${encodeURIComponent(receiptId)}/verify`
+  );
+}
+
+export async function anchorReceipt(baseUrl: string, receiptId: string): Promise<AnchorResult> {
+  return requestJson<AnchorResult>(
+    `${normalizeBaseUrl(baseUrl)}/api/v1/receipts/${encodeURIComponent(receiptId)}/anchor`,
+    {
+      method: "POST"
+    }
   );
 }
 

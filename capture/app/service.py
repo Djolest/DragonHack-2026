@@ -8,6 +8,7 @@ from .depth_challenge import load_verification_config
 from .models import CaptureSessionArtifacts, CaptureSessionStatus, StartCaptureSessionRequest
 from .receipt_workflow import ReceiptWorkflow
 from .oak4_engine import Oak4RuntimeConfig
+from .preview import SessionPreviewRegistry
 from .session_runtime import CaptureSessionManager, SessionArtifacts
 from .storage import LocalStorage
 
@@ -25,12 +26,17 @@ class CaptureService:
             stereo_size=(settings.runtime_stereo_width, settings.runtime_stereo_height),
             sync_threshold_ms=settings.runtime_sync_threshold_ms,
         )
+        self.preview_registry = SessionPreviewRegistry(
+            runtime_config=runtime_config,
+            verification_config=verification_config,
+        )
         self.manager = CaptureSessionManager(
             storage=self.storage,
             verification_config=verification_config,
             public_base_url=settings.public_base_url,
             runtime_config=runtime_config,
             oak_device_id=settings.oak_device_id,
+            observer_factory=self.preview_registry.observer_for_session,
         )
 
     def start_session(self, request: StartCaptureSessionRequest) -> CaptureSessionStatus:
@@ -53,6 +59,38 @@ class CaptureService:
         session = self.manager.stop_session(session_id)
         self._ensure_session_postprocessed(session)
         return self._status_from_snapshot(session.snapshot())
+
+    def get_session_rgb_preview_jpeg(
+        self,
+        session_id: str,
+        *,
+        width: int | None = None,
+        height: int | None = None,
+        quality: int = 90,
+    ) -> bytes:
+        self.manager.get_session(session_id)
+        return self.preview_registry.latest_rgb_jpeg(
+            session_id,
+            width=width,
+            height=height,
+            quality=quality,
+        )
+
+    def get_session_depth_preview_jpeg(
+        self,
+        session_id: str,
+        *,
+        width: int | None = None,
+        height: int | None = None,
+        quality: int = 90,
+    ) -> bytes:
+        self.manager.get_session(session_id)
+        return self.preview_registry.latest_depth_jpeg(
+            session_id,
+            width=width,
+            height=height,
+            quality=quality,
+        )
 
     def _ensure_session_postprocessed(self, session: object) -> None:
         if not hasattr(session, "needs_postprocessing") or not session.needs_postprocessing():

@@ -7,16 +7,19 @@ from uuid import uuid4
 
 from eth_account import Account
 from eth_account.messages import encode_defunct
+from fastapi.testclient import TestClient
 from web3 import Web3
 
+import app.main as main_module
 from app.config import Settings
 from app.models import ReceiptPayload, ReceiptRecord, ReceiptSignature, SignedReceiptEnvelope
 from app.repository import ReceiptRepository
+from app.services.flare_anchor import ANCHOR_ABI, FlareAnchorService
+from app.services.receipts import ReceiptService
 from app.services.transaction_proofs import (
     FlareTransactionProofService,
     public_key_to_address,
 )
-from app.services.flare_anchor import ANCHOR_ABI
 
 
 TEST_PRIVATE_KEY = "0x" + ("22" * 32)
@@ -122,11 +125,48 @@ def test_transaction_proof_service_decodes_anchor_contract_calls() -> None:
     result = service.get_transaction_proof(tx_hash, provided_asset_hash=asset_hash)
 
     assert result.proof_type == "anchor_contract"
+    assert result.decoded is True
     assert result.proof_valid is True
     assert result.record_found is True
     assert result.record_consistent is True
     assert result.receipt_id == receipt_id
     assert result.asset_hash == asset_hash
+    assert result.asset_hash_matches is True
+
+
+def test_transaction_proof_service_marks_unlinked_anchor_calls_as_decoded_but_not_trusted() -> None:
+    tmp_path = make_workspace_temp_path()
+    repository = ReceiptRepository(tmp_path)
+    settings = Settings(storage_root=tmp_path)
+    tx_hash = "0x" + ("56" * 32)
+    receipt_id_hash = Web3.keccak(text="missing-receipt").hex()
+    receipt_hash = "ab" * 32
+    asset_hash = "cd" * 32
+    tx = {
+        "input": build_anchor_input(
+            receipt_id_hash=receipt_id_hash,
+            receipt_hash=receipt_hash,
+            asset_hash=asset_hash,
+            storage_uri="http://127.0.0.1:8100/assets/captures/demo/rgb.mp4",
+        ),
+        "chainId": 114,
+        "blockNumber": 654,
+        "from": "0x0000000000000000000000000000000000000002",
+        "to": "0x0000000000000000000000000000000000000003",
+    }
+    service = FlareTransactionProofService(
+        settings,
+        repository,
+        web3_factory=lambda _rpc_url: FakeWeb3(tx),
+    )
+
+    result = service.get_transaction_proof(tx_hash, provided_asset_hash=asset_hash)
+
+    assert result.proof_type == "anchor_contract"
+    assert result.decoded is True
+    assert result.proof_valid is False
+    assert result.record_found is False
+    assert result.record_consistent is None
     assert result.asset_hash_matches is True
 
 
@@ -160,9 +200,40 @@ def test_transaction_proof_service_decodes_legacy_signed_payload_transactions() 
     result = service.get_transaction_proof(tx_hash, provided_asset_hash=video_hash)
 
     assert result.proof_type == "legacy_signed_payload"
+    assert result.decoded is True
     assert result.proof_valid is True
     assert result.signature_valid is True
     assert result.public_key_matches is True
     assert result.signer_address == payload["address"]
     assert result.asset_hash == video_hash
     assert result.asset_hash_matches is True
+
+
+def test_health_exposes_manual_anchoring_mode(monkeypatch) -> None:
+    tmp_path = make_workspace_temp_path()
+    settings = Settings(
+        storage_root=tmp_path,
+        anchor_on_ingest=False,
+        anchor_contract_address="0x0000000000000000000000000000000000000001",
+        anchor_private_key=TEST_PRIVATE_KEY,
+    )
+    repository = ReceiptRepository(tmp_path)
+
+    monkeypatch.setattr(main_module, "settings", settings)
+    monkeypatch.setattr(main_module, "repository", repository)
+    monkeypatch.setattr(main_module, "receipt_service", ReceiptService(settings, repository))
+    monkeypatch.setattr(main_module, "anchor_service", FlareAnchorService(settings))
+    monkeypatch.setattr(
+        main_module,
+        "transaction_proof_service",
+        FlareTransactionProofService(settings, repository),
+    )
+
+    client = TestClient(main_module.app)
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json()["anchoringMode"] == "manual"
+    assert response.json()["anchorOnIngest"] is False
+    assert response.json()["anchoringEnabled"] is True
+    assert response.json()["manualAnchorAvailable"] is True

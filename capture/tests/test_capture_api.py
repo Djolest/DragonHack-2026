@@ -5,15 +5,19 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
+import cv2
 import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.depth_challenge import VerificationConfig
 from app.main import create_app
 from app.oak4_engine import DeviceSummary, FrameSource, Oak4RuntimeConfig, SyncedFrame
+from app.preview import encode_jpeg, placeholder_frame
 from app.service import CaptureService
-from app.session_runtime import CaptureSessionManager
+from app.session_runtime import CaptureSessionManager, CaptureSessionRuntime
+from app.storage import LocalStorage
 
 
 FRAME_HEIGHT = 120
@@ -133,6 +137,10 @@ class ScriptedFrameSource(FrameSource):
         return None
 
 
+def exploding_frame_source_factory(_simulate: bool, _session_id: str) -> FrameSource:
+    raise RuntimeError("synthetic frame source failure")
+
+
 def make_client(
     tmp_path: Path,
     *,
@@ -166,6 +174,7 @@ def make_client(
         ),
         oak_device_id=None,
         frame_source_factory=lambda _simulate, _session_id: ScriptedFrameSource(frames),
+        observer_factory=service.preview_registry.observer_for_session,
     )
     return TestClient(create_app(settings=settings, service=service))
 
@@ -176,6 +185,19 @@ def make_workspace_temp_path() -> Path:
     path = base_dir / str(uuid4())
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def test_settings_treat_blank_oak_device_id_as_unset() -> None:
+    tmp_path = make_workspace_temp_path()
+    try:
+        env_path = tmp_path / ".env"
+        env_path.write_text("CAPTURE_OAK_DEVICE_ID=\n", encoding="utf-8")
+
+        settings = Settings(_env_file=env_path)
+
+        assert settings.oak_device_id is None
+    finally:
+        shutil.rmtree(tmp_path, ignore_errors=True)
 
 
 def wait_for_terminal_state(client: TestClient, session_id: str) -> dict[str, object]:
@@ -355,5 +377,87 @@ def test_session_api_stays_inconclusive_if_challenge_is_not_completed() -> None:
         assert terminal_payload["proof_summary"]["recorded_frames"] == 0
         assert terminal_payload["proof_summary"]["passed_challenges"] == 0
         assert_no_rgb_artifact(terminal_payload)
+    finally:
+        shutil.rmtree(tmp_path, ignore_errors=True)
+
+
+def test_session_preview_rgb_endpoint_returns_latest_jpeg_frame() -> None:
+    tmp_path = make_workspace_temp_path()
+    try:
+        client = make_client(
+            tmp_path,
+            verification_config=build_config(
+                challenge_schedule_min_seconds=50.0,
+                challenge_schedule_max_seconds=50.0,
+            ),
+            frames=build_frames(
+                [
+                    non_planar_depth(980.0),
+                    non_planar_depth(930.0),
+                    non_planar_depth(860.0),
+                    non_planar_depth(760.0),
+                    non_planar_depth(680.0),
+                    non_planar_depth(620.0),
+                    non_planar_depth(620.0),
+                    non_planar_depth(620.0),
+                ]
+            ),
+        )
+
+        start_response = client.post("/api/v1/capture/sessions", json={"asset_id": "asset-preview"})
+        assert start_response.status_code == 200
+        session_id = start_response.json()["session_id"]
+
+        terminal_payload = wait_for_terminal_state(client, session_id)
+        assert terminal_payload["state"] == "stopped"
+
+        response = client.get(
+            f"/api/v1/capture/sessions/{session_id}/preview/rgb.jpg?width=80&quality=55"
+        )
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/jpeg"
+        assert response.content[:2] == b"\xff\xd8"
+        decoded = cv2.imdecode(np.frombuffer(response.content, dtype=np.uint8), cv2.IMREAD_COLOR)
+        assert decoded is not None
+        assert decoded.shape[1] == 80
+
+        placeholder_bytes = encode_jpeg(
+            placeholder_frame(
+                width=FRAME_WIDTH,
+                height=FRAME_HEIGHT,
+                title="Waiting For RGB Preview",
+                subtitle=f"Session {session_id} has not produced a frame yet.",
+            )
+        )
+        assert response.content != placeholder_bytes
+    finally:
+        shutil.rmtree(tmp_path, ignore_errors=True)
+
+
+def test_session_runtime_factory_exceptions_end_in_failed_state() -> None:
+    tmp_path = make_workspace_temp_path()
+    try:
+        runtime = CaptureSessionRuntime(
+            session_id="session-failure",
+            asset_id="asset-failure",
+            operator_id=None,
+            notes=None,
+            tags=[],
+            simulate=True,
+            storage=LocalStorage(tmp_path),
+            verification_config=build_config(),
+            public_base_url="http://testserver",
+            frame_source_factory=exploding_frame_source_factory,
+            runtime_fps=20.0,
+        )
+
+        with pytest.raises(RuntimeError, match="synthetic frame source failure"):
+            runtime.start(wait_timeout_seconds=1.0)
+
+        snapshot = runtime.snapshot()
+        assert snapshot["state"] == "failed"
+        assert snapshot["error"] == "synthetic frame source failure"
+        assert snapshot["stopped_at"] is not None
+        assert snapshot["proof_summary"] is None
     finally:
         shutil.rmtree(tmp_path, ignore_errors=True)

@@ -1,3 +1,10 @@
+"""Legacy single-shot capture seam kept for older experiments.
+
+The live browser-first demo path runs through the session-based station backend in
+`service.py`, `session_runtime.py`, and `oak4_engine.py`. New capture work should not
+extend this module unless that older flow is intentionally revived.
+"""
+
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -24,6 +31,8 @@ class CameraArtifact:
 
 
 class DepthAIClient:
+    """Legacy client retained for compatibility, not for the live session API path."""
+
     def __init__(self, *, simulate: bool, oak_device_id: str | None) -> None:
         self.simulate = simulate
         self.oak_device_id = oak_device_id
@@ -49,7 +58,7 @@ class DepthAIClient:
   <text x="60" y="240" fill="#f7f2e8" font-size="30" font-family="monospace">asset_id: {request.asset_id}</text>
   <text x="60" y="290" fill="#f7f2e8" font-size="30" font-family="monospace">captured_at: {captured_at.isoformat()}</text>
   <text x="60" y="340" fill="#f7f2e8" font-size="30" font-family="monospace">operator_id: {request.operator_id or "unassigned"}</text>
-  <text x="60" y="390" fill="#f7f2e8" font-size="28" font-family="monospace">TODO(next): wire the real OAK4 RGB + metadata pipeline here.</text>
+  <text x="60" y="390" fill="#f7f2e8" font-size="28" font-family="monospace">legacy capture seam: not used by the live session API</text>
 </svg>"""
         return CameraArtifact(
             content=svg.encode("utf-8"),
@@ -76,6 +85,6 @@ class DepthAIClient:
             )
 
         raise DepthAIUnavailableError(
-            "TODO(next): implement the exact OAK4 DepthAI v3 pipeline after confirming the camera sensors, "
-            f"depth requirements, and capture framing rules for capture_id {capture_id} / asset {request.asset_id}."
+            "Legacy DepthAIClient device capture is not implemented. Use the session-based capture service "
+            f"for capture_id {capture_id} / asset {request.asset_id}."
         )

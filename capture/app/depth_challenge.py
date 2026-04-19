@@ -502,11 +502,12 @@ class RealnessVerifier:
 
         assert self._session_start_timestamp_seconds is not None
         assert self._last_timestamp_seconds is not None
+        previous_timestamp_seconds = self._last_timestamp_seconds
 
         self.frame_index += 1
         self.total_frames += 1
         elapsed_seconds = max(0.0, timestamp_seconds - self._session_start_timestamp_seconds)
-        frame_dt_seconds = max(0.0, timestamp_seconds - self._last_timestamp_seconds)
+        frame_dt_seconds = max(0.0, timestamp_seconds - previous_timestamp_seconds)
         self._last_timestamp_seconds = timestamp_seconds
 
         scene_stats = compute_scene_frame_stats(
@@ -1160,14 +1161,25 @@ class RealnessVerifier:
     ) -> tuple[str, str]:
         if self.active_challenge is not None:
             return ("inconclusive", "Session stopped while a challenge was still active.")
-        if self.recorded_frames < self.config.min_analyzable_frames:
-            return ("inconclusive", "Not enough accepted video frames were recorded.")
         if plane_result.status == "failed":
             return ("failed", plane_result.reason)
         if variance_result.status == "failed":
             return ("failed", variance_result.reason)
         if too_close_result.status == "failed":
             return ("failed", too_close_result.reason)
+        if self.failed_challenges > 0:
+            return ("failed", "At least one anti-replay challenge was failed or timed out.")
+        if self.analyzable_frames < self.config.min_analyzable_frames:
+            return ("inconclusive", "Not enough analyzable depth evidence was recorded.")
+        if plane_result.status != "passed":
+            return ("inconclusive", plane_result.reason)
+        if variance_result.status != "passed":
+            return ("inconclusive", variance_result.reason)
+        if too_close_result.status != "passed":
+            return ("inconclusive", too_close_result.reason)
         if self.passed_challenges < 1:
             return ("inconclusive", "No challenge was completed successfully.")
-        return ("verified", "Depth realism checks passed and at least one challenge succeeded.")
+        return (
+            "verified",
+            "Depth realism checks passed with enough analyzable evidence, and at least one challenge succeeded with no failures.",
+        )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -69,6 +69,50 @@ def create_app(
     async def stop_capture_session(session_id: str) -> StopCaptureSessionResponse:
         try:
             return StopCaptureSessionResponse(session=resolved_service.stop_session(session_id))
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Capture session not found.") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/v1/capture/sessions/{session_id}/preview/rgb.jpg")
+    async def get_capture_session_rgb_preview(
+        session_id: str,
+        width: int | None = Query(default=None, ge=160, le=1600),
+        height: int | None = Query(default=None, ge=120, le=1200),
+        quality: int = Query(default=90, ge=40, le=95),
+    ) -> Response:
+        try:
+            return Response(
+                content=resolved_service.get_session_rgb_preview_jpeg(
+                    session_id,
+                    width=width,
+                    height=height,
+                    quality=quality,
+                ),
+                media_type="image/jpeg",
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Capture session not found.") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/v1/capture/sessions/{session_id}/preview/depth.jpg")
+    async def get_capture_session_depth_preview(
+        session_id: str,
+        width: int | None = Query(default=None, ge=160, le=1200),
+        height: int | None = Query(default=None, ge=120, le=900),
+        quality: int = Query(default=88, ge=40, le=95),
+    ) -> Response:
+        try:
+            return Response(
+                content=resolved_service.get_session_depth_preview_jpeg(
+                    session_id,
+                    width=width,
+                    height=height,
+                    quality=quality,
+                ),
+                media_type="image/jpeg",
+            )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Capture session not found.") from exc
         except Exception as exc:

@@ -1,0 +1,35 @@
+body {
+    font-family: Arial;
+    text-align: center;
+    background: #0f172a;
+    color: white;
+}
+
+h1 {
+    font-size: 3em;
+    margin: 20px;
+}
+
+.tabs button {
+    margin: 10px;
+    padding: 10px 20px;
+    background: #1e293b;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.tab {
+    display: none;
+    margin-top: 20px;
+}
+
+.tab.active {
+    display: block;
+}
+
+button {
+    background: #3b82f6;
+    padding: 10px;
+    border-radius: 8px;
+}

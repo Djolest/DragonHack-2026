@@ -154,7 +154,8 @@ class FlareTransactionProofService:
         return TransactionProofResult(
             tx_hash=normalized_tx_hash,
             proof_type="anchor_contract",
-            proof_valid=record_consistent if record_consistent is not None else True,
+            decoded=True,
+            proof_valid=record is not None and record_consistent is True,
             chain_id=tx.get("chainId"),
             block_number=tx.get("blockNumber"),
             from_address=str(tx.get("from")) if tx.get("from") else None,
@@ -192,6 +193,7 @@ class FlareTransactionProofService:
         return TransactionProofResult(
             tx_hash=normalized_tx_hash,
             proof_type="legacy_signed_payload",
+            decoded=True,
             proof_valid=bool(proof["proof_valid"]),
             chain_id=tx.get("chainId"),
             block_number=tx.get("blockNumber"),

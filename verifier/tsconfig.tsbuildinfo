@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/lib/api.ts","./src/lib/receipt.ts"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/components/abouttab.tsx","./src/components/proofcardmodal.tsx","./src/components/recordtab.tsx","./src/components/verifytab.tsx","./src/lib/api.ts","./src/lib/captureapi.ts","./src/lib/receipt.ts"],"version":"5.9.3"}

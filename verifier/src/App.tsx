@@ -1,8 +1,19 @@
-import { ChangeEvent, FormEvent, startTransition, useState } from "react";
+import { ChangeEvent, FormEvent, startTransition, useEffect, useState } from "react";
 
-import { fetchReceipt, fetchTransactionProof, fetchVerification } from "./lib/api";
+import { AboutTab } from "./components/AboutTab";
+import { ProofCardModal } from "./components/ProofCardModal";
+import { RecordTab } from "./components/RecordTab";
+import { VerifyTab } from "./components/VerifyTab";
+import {
+  anchorReceipt,
+  fetchBackendHealth,
+  fetchReceipt,
+  fetchTransactionProof,
+  fetchVerification
+} from "./lib/api";
 import { parseReceiptEnvelope, sha256FileHex, verifyReceiptEnvelope } from "./lib/receipt";
 import type {
+  BackendHealth,
   ReceiptRecord,
   SignedReceiptEnvelope,
   TransactionProofResult,
@@ -11,42 +22,110 @@ import type {
 } from "./types";
 
 const defaultBackendUrl = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:8000";
+const defaultCaptureUrl = import.meta.env.VITE_CAPTURE_URL ?? "http://127.0.0.1:8100";
 
-type ActiveAction = "transaction" | "fetch" | "analyze" | null;
+type ActiveAction = "transaction" | "fetch" | "analyze" | "anchor" | null;
+type TabId = "record" | "verify" | "about";
+
+const tabCopy: Record<TabId, { eyebrow: string; title: string; description: string }> = {
+  record: {
+    eyebrow: "Station control",
+    title: "Drive the OAK capture station from the same browser app.",
+    description:
+      "The Record tab now talks to the capture FastAPI service directly: start a session, watch annotated preview frames, and stop into proof and receipt outputs without leaving the web shell."
+  },
+  verify: {
+    eyebrow: "Verification preserved",
+    title: "Inspect receipts, compare local video hashes, and decode Flare proofs.",
+    description:
+      "The existing fetch, pasted-receipt, and transaction-plus-video verification paths are unchanged underneath the redesigned interface."
+  },
+  about: {
+    eyebrow: "Architecture",
+    title: "One browser app, two FastAPI services, and the same proof model.",
+    description:
+      "The UI is now organized as a single shell with shared state, while the receipt verification logic and typed proof records stay exactly where they already lived."
+  }
+};
 
 function prettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-function statusLabel(value: boolean | null | undefined): string {
-  if (value === true) {
-    return "yes";
+function firstDefined(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    if (value) {
+      return value;
+    }
   }
-  if (value === false) {
-    return "no";
+  return null;
+}
+
+function clipMiddle(value: string | null | undefined, edge = 10): string {
+  if (!value) {
+    return "n/a";
   }
-  return "n/a";
+  if (value.length <= edge * 2 + 3) {
+    return value;
+  }
+  return `${value.slice(0, edge)}...${value.slice(-edge)}`;
 }
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState<TabId>("record");
   const [backendUrl, setBackendUrl] = useState(defaultBackendUrl);
+  const [captureUrl, setCaptureUrl] = useState(defaultCaptureUrl);
   const [receiptId, setReceiptId] = useState("");
   const [receiptText, setReceiptText] = useState("");
   const [transactionHash, setTransactionHash] = useState("");
   const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
   const [selectedVideoHash, setSelectedVideoHash] = useState<string | null>(null);
+  const [activeReceipt, setActiveReceipt] = useState<SignedReceiptEnvelope | null>(null);
   const [record, setRecord] = useState<ReceiptRecord | null>(null);
   const [verification, setVerification] = useState<VerifiedReceipt | null>(null);
   const [backendVerification, setBackendVerification] = useState<VerificationResult | null>(null);
+  const [backendHealth, setBackendHealth] = useState<BackendHealth | null>(null);
   const [transactionProof, setTransactionProof] = useState<TransactionProofResult | null>(null);
   const [activeAction, setActiveAction] = useState<ActiveAction>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isProofCardOpen, setIsProofCardOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setBackendHealth(null);
+
+    void fetchBackendHealth(backendUrl)
+      .then((nextHealth) => {
+        if (!cancelled) {
+          setBackendHealth(nextHealth);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBackendHealth(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [backendUrl]);
 
   async function runVerification(receipt: SignedReceiptEnvelope) {
     const localVerification = await verifyReceiptEnvelope(receipt);
     startTransition(() => {
       setVerification(localVerification);
     });
+  }
+
+  function shouldClearTransactionProof(nextReceiptId: string): boolean {
+    if (!transactionProof) {
+      return false;
+    }
+
+    const currentProofReceiptId =
+      transactionProof.receipt_id ?? activeReceipt?.payload.receipt_id ?? record?.receipt_id ?? receiptId.trim();
+    return currentProofReceiptId !== nextReceiptId;
   }
 
   function handleVideoChange(event: ChangeEvent<HTMLInputElement>) {
@@ -58,6 +137,7 @@ export default function App() {
 
   async function handleTransactionLookup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setActiveTab("verify");
     setActiveAction("transaction");
     setError(null);
 
@@ -93,12 +173,17 @@ export default function App() {
 
   async function handleFetch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setActiveTab("verify");
     setActiveAction("fetch");
     setError(null);
 
     try {
       const nextRecord = await fetchReceipt(backendUrl, receiptId.trim());
+      if (shouldClearTransactionProof(nextRecord.receipt_id)) {
+        setTransactionProof(null);
+      }
       setRecord(nextRecord);
+      setActiveReceipt(nextRecord.receipt);
       setReceiptText(prettyJson(nextRecord.receipt));
       await runVerification(nextRecord.receipt);
 
@@ -120,12 +205,17 @@ export default function App() {
 
   async function handleAnalyze(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setActiveTab("verify");
     setActiveAction("analyze");
     setError(null);
 
     try {
       const parsed = parseReceiptEnvelope(receiptText);
+      if (shouldClearTransactionProof(parsed.payload.receipt_id)) {
+        setTransactionProof(null);
+      }
       setRecord(null);
+      setActiveReceipt(parsed);
       setReceiptId(parsed.payload.receipt_id);
       setBackendVerification(null);
       await runVerification(parsed);
@@ -138,259 +228,293 @@ export default function App() {
     }
   }
 
+  async function handleAnchorNow() {
+    const targetReceiptId = record?.receipt_id ?? backendVerification?.receipt_id ?? receiptId.trim();
+    if (!targetReceiptId) {
+      return;
+    }
+
+    setActiveTab("verify");
+    setActiveAction("anchor");
+    setError(null);
+
+    try {
+      const anchorResult = await anchorReceipt(backendUrl, targetReceiptId);
+      const [nextRecord, nextBackendVerification] = await Promise.all([
+        fetchReceipt(backendUrl, targetReceiptId),
+        fetchVerification(backendUrl, targetReceiptId)
+      ]);
+      setRecord(nextRecord);
+      setActiveReceipt(nextRecord.receipt);
+      setBackendVerification(nextBackendVerification);
+      setTransactionHash(anchorResult.tx_hash);
+      setTransactionProof(null);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error ? caughtError.message : "Failed to anchor the receipt."
+      );
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
   const signatureHealthy =
-    verification &&
-    verification.signatureValid &&
-    verification.payloadHash === (record?.receipt_hash ?? verification.payloadHash);
+    Boolean(verification?.signatureValid) &&
+    verification?.payloadHash === (record?.receipt_hash ?? verification?.payloadHash);
+  const txRecordLinked =
+    transactionProof?.record_found === true && transactionProof?.record_consistent === true;
   const txMatchHealthy = transactionProof?.asset_hash_matches === true;
+  const canAnchorNow =
+    backendHealth?.anchoringMode === "manual" &&
+    backendHealth.manualAnchorAvailable === true &&
+    (backendVerification?.anchored === false || record?.anchored === false) &&
+    Boolean(record?.receipt_id ?? backendVerification?.receipt_id ?? receiptId.trim());
+  const hasProofData = Boolean(
+    receiptId ||
+      receiptText.trim() ||
+      record ||
+      activeReceipt ||
+      verification ||
+      backendVerification ||
+      transactionProof ||
+      selectedVideoHash
+  );
+
+  const headline = tabCopy[activeTab];
+  const currentExplorerUrl = firstDefined(
+    transactionProof?.explorer_url,
+    backendVerification?.anchor_tx_url,
+    record?.anchor_tx_url
+  );
+  const currentStorageUri = firstDefined(
+    activeReceipt?.payload.storage_uri,
+    record?.receipt.payload.storage_uri,
+    transactionProof?.storage_uri
+  );
+  const currentSigner = firstDefined(
+    verification?.recoveredAddress,
+    backendVerification?.signer_address,
+    record?.signer_address,
+    transactionProof?.signer_address
+  );
 
   return (
-    <main className="app-shell">
-      <section className="hero-card">
-        <div>
-          <p className="eyebrow">DragonHack MVP</p>
-          <h1>OAKProof verifier console</h1>
-          <p className="hero-copy">
-            Hash a local video, inspect the Flare transaction payload, and cross-check the
-            on-chain commitment against the signed receipt produced by the OAK4 station.
-          </p>
-        </div>
-        <div className="hero-status">
-          <span className="status-chip">Video SHA-256 match</span>
-          <span className="status-chip">Receipt signature recovery</span>
-          <span className="status-chip">Flare transaction decoding</span>
-        </div>
-      </section>
-
-      <form className="panel panel-wide" onSubmit={handleTransactionLookup}>
-        <div className="panel-header">
-          <h2>Verify video against Flare transaction</h2>
-          <p>
-            Enter the transaction hash, pick the recorded video, and compare its local hash with
-            the asset digest committed on chain.
-          </p>
-        </div>
-
-        <div className="panel-grid">
-          <label>
-            <span>Backend URL</span>
-            <input
-              value={backendUrl}
-              onChange={(event) => setBackendUrl(event.target.value)}
-              placeholder="http://127.0.0.1:8000"
-            />
-          </label>
-
-          <label>
-            <span>Transaction hash</span>
-            <input
-              value={transactionHash}
-              onChange={(event) => setTransactionHash(event.target.value)}
-              placeholder="0x..."
-            />
-          </label>
-
-          <label>
-            <span>Recorded video</span>
-            <input type="file" accept="video/*" onChange={handleVideoChange} />
-          </label>
-        </div>
-
-        {selectedVideo ? (
-          <p className="helper-text">
-            Selected file: <strong>{selectedVideo.name}</strong>
-            {selectedVideoHash ? ` | SHA-256 ${selectedVideoHash}` : ""}
-          </p>
-        ) : null}
-
-        <button type="submit" disabled={activeAction !== null || transactionHash.trim().length === 0}>
-          {activeAction === "transaction" ? "Checking Flare..." : "Verify video vs transaction"}
-        </button>
-      </form>
-
-      <section className="grid">
-        <form className="panel" onSubmit={handleFetch}>
-          <div className="panel-header">
-            <h2>Fetch receipt from backend</h2>
-            <p>Load the stored receipt record when you already know the receipt ID.</p>
-          </div>
-
-          <label>
-            <span>Receipt ID</span>
-            <input
-              value={receiptId}
-              onChange={(event) => setReceiptId(event.target.value)}
-              placeholder="oakproof-..."
-            />
-          </label>
-
-          <button type="submit" disabled={activeAction !== null || receiptId.trim().length === 0}>
-            {activeAction === "fetch" ? "Loading receipt..." : "Fetch receipt"}
-          </button>
-        </form>
-
-        <form className="panel" onSubmit={handleAnalyze}>
-          <div className="panel-header">
-            <h2>Paste receipt JSON</h2>
-            <p>Verify any signed receipt in-browser without trusting the backend.</p>
-          </div>
-
-          <label>
-            <span>Receipt envelope</span>
-            <textarea
-              rows={18}
-              value={receiptText}
-              onChange={(event) => setReceiptText(event.target.value)}
-              placeholder='{"payload": {...}, "signature": {...}}'
-            />
-          </label>
-
-          <button
-            type="submit"
-            disabled={activeAction !== null || receiptText.trim().length === 0}
-          >
-            {activeAction === "analyze" ? "Verifying receipt..." : "Verify pasted receipt"}
-          </button>
-        </form>
-      </section>
-
-      {error ? <section className="error-banner">{error}</section> : null}
-
-      <section className="results-grid">
-        <article className="panel result-panel">
-          <div className="panel-header">
-            <h2>Flare transaction match</h2>
-            <p>What the chain transaction says about the committed video hash.</p>
-          </div>
-
-          <dl className="stats-list">
-            <div>
-              <dt>Proof type</dt>
-              <dd>{transactionProof?.proof_type ?? "n/a"}</dd>
+    <div className="app-root">
+      <div className="app-shell">
+        <header className="glass-panel app-header">
+          <div className="brand-lockup">
+            <p className="brand-kicker">DragonHack MVP</p>
+            <div className="brand-title-row">
+              <h1>OAKProof</h1>
+              <span className="brand-pill">single web app</span>
             </div>
-            <div>
-              <dt>Transaction decoded</dt>
-              <dd
-                className={
-                  transactionProof?.proof_valid
-                    ? "good"
-                    : transactionProof
-                      ? "warn"
-                      : undefined
-                }
+            <p className="brand-copy">
+              One browser app for station control and proof verification, backed by the capture
+              service on one side and the receipt or anchor service on the other.
+            </p>
+          </div>
+
+          <nav className="tab-strip" aria-label="Primary">
+            {(["record", "verify", "about"] as TabId[]).map((tabId) => (
+              <button
+                key={tabId}
+                type="button"
+                className={`tab-button${activeTab === tabId ? " is-active" : ""}`}
+                onClick={() => setActiveTab(tabId)}
               >
-                {transactionProof ? statusLabel(transactionProof.proof_valid) : "n/a"}
-              </dd>
-            </div>
-            <div>
-              <dt>Local video hash</dt>
-              <dd>{selectedVideoHash ?? "n/a"}</dd>
-            </div>
-            <div>
-              <dt>On-chain asset hash</dt>
-              <dd>{transactionProof?.asset_hash ?? "n/a"}</dd>
-            </div>
-            <div>
-              <dt>Video matches tx</dt>
-              <dd className={txMatchHealthy ? "good" : transactionProof ? "warn" : undefined}>
-                {transactionProof
-                  ? statusLabel(transactionProof.asset_hash_matches)
-                  : "n/a"}
-              </dd>
-            </div>
-            <div>
-              <dt>Explorer</dt>
-              <dd>
-                {transactionProof?.explorer_url ? (
-                  <a href={transactionProof.explorer_url} target="_blank" rel="noreferrer">
-                    Open transaction
-                  </a>
-                ) : (
-                  "n/a"
-                )}
-              </dd>
-            </div>
-          </dl>
-        </article>
+                {tabId}
+              </button>
+            ))}
+          </nav>
 
-        <article className="panel result-panel">
-          <div className="panel-header">
-            <h2>Receipt verification summary</h2>
-            <p>Canonical message, signer recovery, and digest checks.</p>
+          <div className="header-controls">
+            <label className="header-field">
+              <span>Receipt API</span>
+              <input
+                value={backendUrl}
+                onChange={(event) => setBackendUrl(event.target.value)}
+                placeholder="http://127.0.0.1:8000"
+              />
+            </label>
+
+            <label className="header-field">
+              <span>Station API</span>
+              <input
+                value={captureUrl}
+                onChange={(event) => setCaptureUrl(event.target.value)}
+                placeholder="http://127.0.0.1:8100"
+              />
+            </label>
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setIsProofCardOpen(true)}
+              disabled={!hasProofData}
+            >
+              Proof card
+            </button>
+          </div>
+        </header>
+
+        <section className="glass-panel hero-shell">
+          <div className="hero-copy">
+            <p className="section-kicker">{headline.eyebrow}</p>
+            <h2>{headline.title}</h2>
+            <p>{headline.description}</p>
+
+            <div className="status-row">
+              <span className={`status-pill${signatureHealthy ? " is-good" : ""}`}>
+                Signature {verification ? (signatureHealthy ? "ready" : "invalid") : "pending"}
+              </span>
+              <span className={`status-pill${txRecordLinked ? " is-good" : ""}`}>
+                Chain link {txRecordLinked ? "confirmed" : "waiting"}
+              </span>
+              <span className={`status-pill${txMatchHealthy ? " is-good" : ""}`}>
+                Video hash {txMatchHealthy ? "confirmed" : "waiting"}
+              </span>
+              <span className={`status-pill${backendHealth?.anchoringMode === "manual" ? " is-warn" : " is-good"}`}>
+                Anchor mode {backendHealth?.anchoringMode ?? "unknown"}
+              </span>
+            </div>
           </div>
 
-          <dl className="stats-list">
-            <div>
-              <dt>Signature valid</dt>
-              <dd className={signatureHealthy ? "good" : "warn"}>
-                {signatureHealthy ? "yes" : "not verified yet"}
-              </dd>
-            </div>
-            <div>
-              <dt>Recovered signer</dt>
-              <dd>{verification?.recoveredAddress ?? "n/a"}</dd>
-            </div>
-            <div>
-              <dt>Payload SHA-256</dt>
-              <dd>{verification?.payloadHash ?? "n/a"}</dd>
-            </div>
-            <div>
-              <dt>Storage URI</dt>
-              <dd>{record?.receipt.payload.storage_uri ?? transactionProof?.storage_uri ?? "n/a"}</dd>
-            </div>
-          </dl>
-        </article>
+          <div className="hero-preview-stack">
+            <div className="hero-preview-shell">
+              <div className="hero-preview-bar">
+                <span className="hero-window-dots">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                <span>{activeTab === "record" ? "record shell" : `${activeTab} shell`}</span>
+              </div>
 
-        <article className="panel result-panel">
-          <div className="panel-header">
-            <h2>Backend receipt status</h2>
-            <p>What the backend currently knows about this capture receipt.</p>
+              <div className="hero-preview-body">
+                <div className="preview-orb" />
+                <div className="preview-grid" />
+                <div className="preview-copy">
+                  <p className="section-kicker">Hero preview shell</p>
+                  <h3>{receiptId ? clipMiddle(receiptId, 12) : "Ready for first proof card"}</h3>
+                  <p>
+                    {activeTab === "record"
+                      ? "Start and stop OAK station sessions here, keep the preview fresh over HTTP, and land on proof outputs that can feed the verification side of the app."
+                      : activeTab === "verify"
+                        ? "Use the preserved verification flows below to fetch receipts, paste envelopes, and compare local files against on-chain data."
+                        : "The shell, modal, and verification panels now live under one consistent app surface."}
+                  </p>
+                </div>
+
+                <div className="hero-metric-row">
+                  <div className="hero-metric">
+                    <span>Signer</span>
+                    <strong>{clipMiddle(currentSigner, 10)}</strong>
+                  </div>
+                  <div className="hero-metric">
+                    <span>Video hash</span>
+                    <strong>{clipMiddle(selectedVideoHash, 10)}</strong>
+                  </div>
+                  <div className="hero-metric">
+                    <span>Storage</span>
+                    <strong>{clipMiddle(currentStorageUri, 10)}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="hero-action-row">
+              <button type="button" className="primary-button" onClick={() => setActiveTab("verify")}>
+                Open verify tab
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setIsProofCardOpen(true)}
+                disabled={!hasProofData}
+              >
+                Open proof card
+              </button>
+              {currentExplorerUrl ? (
+                <a
+                  className="secondary-link"
+                  href={currentExplorerUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Explorer
+                </a>
+              ) : (
+                <span className="secondary-link is-disabled">Explorer pending</span>
+              )}
+            </div>
           </div>
-
-          <dl className="stats-list">
-            <div>
-              <dt>Receipt ID</dt>
-              <dd>{record?.receipt_id ?? transactionProof?.receipt_id ?? (receiptId || "n/a")}</dd>
-            </div>
-            <div>
-              <dt>Anchored</dt>
-              <dd className={backendVerification?.anchored ? "good" : "warn"}>
-                {backendVerification ? statusLabel(backendVerification.anchored) : "n/a"}
-              </dd>
-            </div>
-            <div>
-              <dt>Backend signer</dt>
-              <dd>{backendVerification?.signer_address ?? record?.signer_address ?? "n/a"}</dd>
-            </div>
-            <div>
-              <dt>Record found for tx</dt>
-              <dd className={transactionProof?.record_found ? "good" : transactionProof ? "warn" : undefined}>
-                {transactionProof ? statusLabel(transactionProof.record_found) : "n/a"}
-              </dd>
-            </div>
-          </dl>
-        </article>
-      </section>
-
-      {transactionProof ? (
-        <section className="panel message-panel">
-          <div className="panel-header">
-            <h2>Decoded chain payload</h2>
-            <p>The normalized transaction data returned by the backend Flare decoder.</p>
-          </div>
-          <pre>{prettyJson(transactionProof)}</pre>
         </section>
-      ) : null}
 
-      {verification ? (
-        <section className="panel message-panel">
-          <div className="panel-header">
-            <h2>Canonical signed message</h2>
-            <p>This is the exact payload string used for the EIP-191 signature.</p>
-          </div>
-          <pre>{verification.canonicalMessage}</pre>
+        <section className="tab-section">
+          {activeTab === "record" ? (
+            <RecordTab
+              captureUrl={captureUrl}
+              onOpenProofCard={() => setIsProofCardOpen(true)}
+              onReceiptIdReady={setReceiptId}
+            />
+          ) : null}
+
+          {activeTab === "verify" ? (
+            <VerifyTab
+              receiptId={receiptId}
+              receiptText={receiptText}
+              transactionHash={transactionHash}
+              selectedVideo={selectedVideo}
+              selectedVideoHash={selectedVideoHash}
+              activeReceipt={activeReceipt}
+              record={record}
+              verification={verification}
+              backendVerification={backendVerification}
+              transactionProof={transactionProof}
+              activeAction={activeAction}
+              error={error}
+              backendHealth={backendHealth}
+              signatureHealthy={signatureHealthy}
+              canAnchorNow={canAnchorNow}
+              decodedTransactionText={transactionProof ? prettyJson(transactionProof) : null}
+              canonicalMessage={verification?.canonicalMessage ?? null}
+              onReceiptIdChange={setReceiptId}
+              onReceiptTextChange={setReceiptText}
+              onTransactionHashChange={setTransactionHash}
+              onVideoChange={handleVideoChange}
+              onFetchSubmit={handleFetch}
+              onAnalyzeSubmit={handleAnalyze}
+              onAnchorNow={handleAnchorNow}
+              onTransactionSubmit={handleTransactionLookup}
+              onOpenProofCard={() => setIsProofCardOpen(true)}
+            />
+          ) : null}
+
+          {activeTab === "about" ? (
+            <AboutTab
+              backendUrl={backendUrl}
+              receiptId={receiptId}
+              verification={verification}
+              transactionProof={transactionProof}
+              record={record}
+              onOpenProofCard={() => setIsProofCardOpen(true)}
+            />
+          ) : null}
         </section>
-      ) : null}
-    </main>
+      </div>
+
+      <ProofCardModal
+        isOpen={isProofCardOpen}
+        onClose={() => setIsProofCardOpen(false)}
+        receiptId={receiptId}
+        activeReceipt={activeReceipt}
+        record={record}
+        verification={verification}
+        backendVerification={backendVerification}
+        backendHealth={backendHealth}
+        transactionProof={transactionProof}
+        selectedVideoHash={selectedVideoHash}
+      />
+    </div>
   );
 }

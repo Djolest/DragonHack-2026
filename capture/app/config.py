@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -46,6 +46,13 @@ class Settings(BaseSettings):
     runtime_sync_threshold_ms: int = 50
     session_start_timeout_seconds: float = 10.0
     session_stop_timeout_seconds: float = 20.0
+
+    @field_validator("oak_device_id", mode="before")
+    @classmethod
+    def blank_oak_device_id_to_none(cls, value: object) -> object:
+        if isinstance(value, str) and value.strip() == "":
+            return None
+        return value
 
     @property
     def origins(self) -> list[str]:

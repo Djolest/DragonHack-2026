@@ -32,12 +32,17 @@ app.add_middleware(
 
 @app.get("/health")
 async def health() -> dict[str, object]:
+    anchoring_enabled = anchor_service.is_enabled()
+    anchoring_mode = "automatic" if settings.anchor_on_ingest else "manual"
     return {
         "status": "ok",
         "service": settings.app_name,
         "environment": settings.app_env,
         "storedReceipts": repository.count(),
-        "anchoringEnabled": anchor_service.is_enabled(),
+        "anchoringEnabled": anchoring_enabled,
+        "anchorOnIngest": settings.anchor_on_ingest,
+        "anchoringMode": anchoring_mode,
+        "manualAnchorAvailable": anchoring_enabled and anchoring_mode == "manual",
     }
 
 
