@@ -1,30 +1,42 @@
 {
-  "roi": {
-    "width_fraction": 0.34,
-    "height_fraction": 0.46
-  },
-  "depth": {
-    "min_depth_mm": 120,
-    "max_depth_mm": 1600,
-    "min_valid_depth_ratio": 0.32,
-    "poor_depth_ratio": 0.14
-  },
-  "motion": {
-    "min_valid_frames_for_pass": 8,
-    "min_valid_frames_for_summary": 8,
-    "min_forward_motion_mm": 80.0
+  "scene": {
+    "min_depth_mm": 180,
+    "max_depth_mm": 2200,
+    "min_valid_depth_ratio": 0.2,
+    "flat_scene_min_valid_depth_ratio": 0.55,
+    "reliable_depth_floor_mm": 220,
+    "too_close_pixel_ratio": 0.08,
+    "max_too_close_frame_ratio": 0.3,
+    "min_analyzable_frames": 20,
+    "min_depth_spread_mm": 120.0,
+    "depth_spread_low_percentile": 5.0,
+    "depth_spread_high_percentile": 95.0,
+    "sampling_stride": 2
   },
   "planarity": {
-    "plane_fit_min_points": 600,
-    "max_plane_fit_points": 3000,
-    "max_plane_fit_rms_mm": 12.0,
-    "max_depth_std_mm": 28.0,
-    "elevated_frame_ratio": 0.72,
-    "min_valid_frames_for_risk": 10
+    "plane_fit_min_points": 1000,
+    "max_plane_fit_points": 8000,
+    "max_plane_fit_rms_mm": 18.0,
+    "max_planar_frame_ratio": 0.75
   },
-  "quality": {
-    "poor_depth_frame_ratio_for_inconclusive": 0.55,
-    "history_size": 240,
-    "recent_series_length": 40
+  "challenge": {
+    "roi_width_fraction": 0.22,
+    "roi_height_fraction": 0.24,
+    "center_safe_width_fraction": 0.5,
+    "center_safe_height_fraction": 0.5,
+    "min_valid_depth_ratio": 0.35,
+    "min_valid_frames_for_pass": 5,
+    "min_forward_motion_mm": 90.0,
+    "min_progress_frames_for_pass": 2,
+    "min_progress_step_mm": 8.0,
+    "min_motion_duration_seconds": 1.0,
+    "timeout_seconds": 30.0,
+    "schedule_min_seconds": 300.0,
+    "schedule_max_seconds": 600.0
+  },
+  "workflow": {
+    "confirmation_frames": 10,
+    "recording_pause_confirmation_frames": 4,
+    "post_challenge_resume_delay_seconds": 1.5
   }
 }

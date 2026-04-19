@@ -7,7 +7,7 @@ name = "oakproof-capture"
 version = "0.1.0"
 description = "OAKProof Luxonis OAK4 proof-capture station service."
 readme = "README.md"
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.11,<3.13"
 dependencies = [
   "depthai",
   "eth-account>=0.13.0,<1.0.0",

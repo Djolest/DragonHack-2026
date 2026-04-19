@@ -1,4 +1,4 @@
-import type { ReceiptRecord, VerificationResult } from "../types";
+import type { ReceiptRecord, TransactionProofResult, VerificationResult } from "../types";
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, "");
@@ -26,4 +26,18 @@ export async function fetchVerification(
   return requestJson<VerificationResult>(
     `${normalizeBaseUrl(baseUrl)}/api/v1/receipts/${encodeURIComponent(receiptId)}/verify`
   );
+}
+
+export async function fetchTransactionProof(
+  baseUrl: string,
+  txHash: string,
+  assetHash?: string
+): Promise<TransactionProofResult> {
+  const url = new URL(
+    `${normalizeBaseUrl(baseUrl)}/api/v1/transactions/${encodeURIComponent(txHash)}`
+  );
+  if (assetHash) {
+    url.searchParams.set("asset_hash", assetHash);
+  }
+  return requestJson<TransactionProofResult>(url.toString());
 }

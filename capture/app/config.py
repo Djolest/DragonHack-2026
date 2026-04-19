@@ -1,7 +1,15 @@
+from __future__ import annotations
+
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+DEFAULT_VERIFICATION_CONFIG_PATH = (
+    Path(__file__).resolve().parents[1] / "config" / "anti_replay_thresholds.json"
+)
 
 
 class Settings(BaseSettings):
@@ -20,17 +28,24 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     storage_root: Path = Path("data")
     public_base_url: str = "http://127.0.0.1:8100"
-    backend_base_url: str = "http://127.0.0.1:8000"
+    backend_base_url: str | None = "http://127.0.0.1:8000"
     cors_allow_origins: str = "*"
-    station_id: str = "oakproof-station-01"
-    station_signer_private_key: str = (
-        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-    )
+    station_id: str = "oak4-station"
+    station_signer_private_key: str | None = None
     simulate: bool = True
     oak_device_id: str | None = None
     auto_submit_to_backend: bool = True
     receipt_namespace: str = "oakproof"
-    request_timeout_seconds: float = 10.0
+    request_timeout_seconds: float = 20.0
+    verification_config_path: Path = Field(default=DEFAULT_VERIFICATION_CONFIG_PATH)
+    runtime_fps: float = 20.0
+    runtime_rgb_width: int = 1280
+    runtime_rgb_height: int = 960
+    runtime_stereo_width: int = 1280
+    runtime_stereo_height: int = 800
+    runtime_sync_threshold_ms: int = 50
+    session_start_timeout_seconds: float = 10.0
+    session_stop_timeout_seconds: float = 20.0
 
     @property
     def origins(self) -> list[str]:

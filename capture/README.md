@@ -86,9 +86,11 @@ Run the API service with:
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8100
 ```
 
-### Primary Endpoint
+### Session Endpoints
 
-- `POST /api/v1/capture`
+- `POST /api/v1/capture/sessions`
+- `GET /api/v1/capture/sessions/{session_id}`
+- `POST /api/v1/capture/sessions/{session_id}/stop`
 
 Example request:
 
@@ -104,4 +106,5 @@ Example request:
 ### Notes
 
 - The FastAPI capture service still defaults to simulation mode for the broader MVP receipt flow.
+- Verified sessions now hash `rgb.mp4`, write a signed `receipt.json`, and can auto-submit that receipt to the backend for Flare anchoring.
 - Static assets are exposed from `GET /assets/{path}` so the verifier can inspect locally stored artifacts during the MVP phase.

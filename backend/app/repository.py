@@ -37,3 +37,11 @@ class ReceiptRepository:
             encoding="utf-8",
         )
         return stored_record
+
+    def find_by_anchor_tx_hash(self, tx_hash: str) -> ReceiptRecord | None:
+        normalized = tx_hash.lower()
+        for path in self.records_dir.glob("*.json"):
+            record = ReceiptRecord.model_validate_json(path.read_text(encoding="utf-8"))
+            if record.anchor_tx_hash and record.anchor_tx_hash.lower() == normalized:
+                return record
+        return None

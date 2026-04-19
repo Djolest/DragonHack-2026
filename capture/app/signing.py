@@ -22,9 +22,10 @@ def payload_digest_hex(payload: ReceiptPayload) -> str:
 
 def sign_payload(payload: ReceiptPayload, private_key: str) -> ReceiptSignature:
     message = encode_defunct(text=payload_message(payload))
-    signed = Account.sign_message(message, private_key=private_key)
+    account = Account.from_key(private_key)
+    signed = account.sign_message(message)
     return ReceiptSignature(
         scheme="eip191",
-        signer_address=signed.address,
+        signer_address=account.address,
         signature=signed.signature.hex(),
     )

@@ -135,6 +135,16 @@ h2 {
   background: var(--panel);
 }
 
+.panel-wide {
+  margin-top: 20px;
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
 .panel-header {
   margin-bottom: 16px;
 }
@@ -158,6 +168,10 @@ textarea {
   padding: 14px 16px;
   background: rgba(255, 255, 255, 0.72);
   color: var(--ink);
+}
+
+input[type="file"] {
+  padding: 10px 12px;
 }
 
 textarea,
@@ -232,10 +246,19 @@ dd {
   box-shadow: var(--shadow);
 }
 
+.helper-text {
+  margin: 0 0 16px;
+  color: var(--ink-soft);
+}
+
 @media (max-width: 860px) {
   .hero-card,
   .grid,
   .results-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-grid {
     grid-template-columns: 1fr;
   }
 

@@ -7,7 +7,7 @@ name = "oakproof-backend"
 version = "0.1.0"
 description = "OAKProof receipt backend and Flare anchoring service."
 readme = "README.md"
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.11,<3.13"
 dependencies = [
   "eth-account>=0.13.0,<1.0.0",
   "fastapi>=0.115.0,<1.0.0",

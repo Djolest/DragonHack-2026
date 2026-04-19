@@ -12,7 +12,7 @@ OAKProof captures a proof asset at a Luxonis OAK4 station, signs a structured re
 - Produces the proof asset and the receipt payload.
 - Signs the receipt with the station wallet using an EIP-191 message signature.
 - Stores the raw asset and signed receipt locally.
-- Optionally forwards the signed receipt to `backend/`.
+- For verified sessions, hashes the recorded video, writes a signed receipt, and can auto-forward it to `backend/`.
 
 ### `backend/`
 
@@ -32,6 +32,7 @@ OAKProof captures a proof asset at a Luxonis OAK4 station, signs a structured re
 ### `verifier/`
 
 - Fetches backend records or verifies pasted receipts locally.
+- Verifies `transaction hash + local video` by decoding the Flare transaction payload and comparing the on-chain asset digest to the browser-computed SHA-256.
 - Rebuilds the exact signed message.
 - Recovers the signing address in the browser.
 - Displays Flare explorer links when anchoring is complete.
@@ -41,9 +42,9 @@ OAKProof captures a proof asset at a Luxonis OAK4 station, signs a structured re
 1. Operator triggers `POST /api/v1/capture`.
 2. Capture service saves the asset under `capture/data/captures/YYYYMMDD/`.
 3. Capture service signs a canonical JSON receipt payload.
-4. Backend receives the receipt and stores `backend/data/records/{receipt_id}.json`.
-5. Backend anchors digests on Flare Coston2 when configured.
-6. Verifier UI validates the signature and presents the anchor state.
+4. Capture service optionally auto-submits the signed receipt to `backend/`.
+5. Backend stores `backend/data/records/{receipt_id}.json` and can anchor digests on Flare Coston2 inline on ingest.
+6. Verifier UI validates the signature, decodes the Flare transaction, and compares the tx digest to the uploaded video hash.
 
 ## Trust Model
 

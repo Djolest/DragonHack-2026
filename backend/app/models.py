@@ -59,3 +59,29 @@ class VerificationResult(BaseModel):
     receipt_hash: str
     anchor_tx_hash: str | None = None
     anchor_tx_url: str | None = None
+
+
+class TransactionProofResult(BaseModel):
+    tx_hash: str
+    proof_type: Literal["anchor_contract", "legacy_signed_payload"]
+    proof_valid: bool
+    chain_id: int | None = None
+    block_number: int | None = None
+    from_address: str | None = None
+    to_address: str | None = None
+    explorer_url: str | None = None
+    receipt_id: str | None = None
+    receipt_id_hash: str | None = None
+    receipt_hash: str | None = None
+    asset_hash: str | None = None
+    storage_uri: str | None = None
+    signer_address: str | None = None
+    submitter_address: str | None = None
+    signature: str | None = None
+    public_key: str | None = None
+    signature_valid: bool | None = None
+    public_key_matches: bool | None = None
+    record_found: bool = False
+    record_consistent: bool | None = None
+    provided_asset_hash: str | None = None
+    asset_hash_matches: bool | None = None

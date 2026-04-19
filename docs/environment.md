@@ -34,6 +34,7 @@
 - `BACKEND_FLARE_EXPLORER_BASE_URL`: explorer base URL for transaction links.
 - `BACKEND_ANCHOR_CONTRACT_ADDRESS`: deployed `OAKProofAnchor` contract address.
 - `BACKEND_ANCHOR_PRIVATE_KEY`: backend wallet that submits anchor transactions.
+- `BACKEND_ANCHOR_ON_INGEST`: when `true`, anchor each stored receipt immediately if chain config is available.
 - `BACKEND_ANCHOR_GAS_LIMIT`: gas limit used for anchor transactions.
 - `BACKEND_ANCHOR_TIMEOUT_SECONDS`: timeout when waiting for a mined anchor transaction.
 

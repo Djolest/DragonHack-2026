@@ -42,6 +42,11 @@ export async function sha256Hex(input: string): Promise<string> {
   return toHex(digest);
 }
 
+export async function sha256FileHex(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return toHex(digest);
+}
+
 export async function verifyReceiptEnvelope(
   receipt: SignedReceiptEnvelope
 ): Promise<VerifiedReceipt> {

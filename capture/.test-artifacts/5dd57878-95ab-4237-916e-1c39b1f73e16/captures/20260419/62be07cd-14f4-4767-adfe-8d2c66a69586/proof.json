@@ -1,0 +1,155 @@
+{
+  "analyzable_frames": 6,
+  "challenge_summary": {
+    "events": [
+      {
+        "baseline_depth_mm": 760.0,
+        "challenge_id": 1,
+        "close_reason": "Object moved closer to the camera inside the ROI with steady forward motion.",
+        "closed_at_seconds": 5.0,
+        "elapsed_seconds": 3.0,
+        "issued_at_seconds": 0.0,
+        "max_forward_motion_mm": 140.0,
+        "motion_duration_seconds": 2.0,
+        "progress_frames": 2,
+        "roi": {
+          "x0": 55,
+          "x1": 95,
+          "y0": 45,
+          "y1": 85
+        },
+        "state": "passed",
+        "valid_frames": 3
+      }
+    ],
+    "failed": 0,
+    "issued": 1,
+    "passed": 1
+  },
+  "device_info": {
+    "board_name": "SIM",
+    "board_revision": "SIM",
+    "camera_sensors": {
+      "CAM_A": "SIM",
+      "CAM_B": "SIM",
+      "CAM_C": "SIM"
+    },
+    "connected_sockets": [
+      "CAM_A",
+      "CAM_B",
+      "CAM_C"
+    ],
+    "device_id": "simulate",
+    "name": "sim-test",
+    "platform": "RVC4",
+    "product_name": "OAK4-SIM",
+    "state": "SIMULATED",
+    "usb_speed": "SIMULATED"
+  },
+  "failed_challenges": 0,
+  "frames_processed": 16,
+  "latest_live_state": {
+    "analyzable_frames": 6,
+    "challenges_failed": 0,
+    "challenges_issued": 1,
+    "challenges_passed": 1,
+    "current_challenge": null,
+    "elapsed_seconds": 15.0,
+    "frame_index": 16,
+    "median_depth_spread_mm": 382.0,
+    "next_challenge_eta_seconds": 44.0,
+    "plane_like_ratio": 0.0,
+    "prompt": "Recording session in progress.",
+    "recorded_duration_seconds": 6.0,
+    "recorded_frames": 6,
+    "recording_pause_reason": null,
+    "recording_state": "recording",
+    "scene_stats": {
+      "analyzable": true,
+      "depth_spread_mm": 382.0,
+      "frame_index": 16,
+      "plane_fit_rms_mm": 140.9739132286753,
+      "too_close_pixel_ratio": 0.0,
+      "valid_depth_ratio": 1.0
+    },
+    "too_close_frame_ratio": 0.0,
+    "warning": null,
+    "workflow_progress_frames": 0,
+    "workflow_stage": "recording"
+  },
+  "overall_status": "verified",
+  "passed_challenges": 1,
+  "pause_summary": {
+    "challenge": 2,
+    "depth_variance_check": 2,
+    "distance_check": 2,
+    "plane_fit_check": 2,
+    "post_challenge_delay": 2
+  },
+  "paused_frames": 10,
+  "receipt_workflow": {
+    "error": "'SignedMessage' object has no attribute 'address'",
+    "reason": "Receipt post-processing failed unexpectedly.",
+    "status": "failed"
+  },
+  "recorded_duration_seconds": 6.0,
+  "recorded_frames": 6,
+  "scene_checks": {
+    "depth_variance": {
+      "frames_considered": 6,
+      "observed_value": 382.0,
+      "reason": "Scene depth spread stayed above the configured minimum.",
+      "status": "passed",
+      "threshold": 120.0
+    },
+    "plane_like": {
+      "frames_considered": 6,
+      "observed_value": 0.0,
+      "reason": "Scene planarity stayed below the configured risk threshold.",
+      "status": "passed",
+      "threshold": 0.75
+    },
+    "too_close": {
+      "frames_considered": 6,
+      "observed_value": 0.0,
+      "reason": "Recorded frames stayed within the reliable camera distance.",
+      "status": "passed",
+      "threshold": 0.3
+    }
+  },
+  "status_reason": "Depth realism checks passed and at least one challenge succeeded.",
+  "thresholds": {
+    "challenge_center_safe_height_fraction": 0.5,
+    "challenge_center_safe_width_fraction": 0.5,
+    "challenge_min_forward_motion_mm": 90.0,
+    "challenge_min_motion_duration_seconds": 1.0,
+    "challenge_min_progress_frames_for_pass": 2,
+    "challenge_min_progress_step_mm": 8.0,
+    "challenge_min_valid_depth_ratio": 0.35,
+    "challenge_min_valid_frames_for_pass": 3,
+    "challenge_roi_height_fraction": 0.24,
+    "challenge_roi_width_fraction": 0.22,
+    "challenge_schedule_max_seconds": 50.0,
+    "challenge_schedule_min_seconds": 50.0,
+    "challenge_timeout_seconds": 10.0,
+    "depth_spread_high_percentile": 95.0,
+    "depth_spread_low_percentile": 5.0,
+    "flat_scene_min_valid_depth_ratio": 0.55,
+    "max_planar_frame_ratio": 0.75,
+    "max_planar_plane_fit_rms_mm": 18.0,
+    "max_plane_fit_points": 3000,
+    "max_too_close_frame_ratio": 0.3,
+    "min_analyzable_frames": 5,
+    "min_depth_spread_mm": 120.0,
+    "plane_fit_min_points": 200,
+    "post_challenge_resume_delay_seconds": 1.5,
+    "recording_pause_confirmation_frames": 2,
+    "reliable_depth_floor_mm": 220,
+    "scene_max_depth_mm": 2200,
+    "scene_min_depth_mm": 180,
+    "scene_min_valid_depth_ratio": 0.2,
+    "scene_sampling_stride": 1,
+    "too_close_pixel_ratio": 0.08,
+    "workflow_confirmation_frames": 2
+  }
+}

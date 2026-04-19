@@ -47,6 +47,32 @@ export interface VerificationResult {
   anchor_tx_url: string | null;
 }
 
+export interface TransactionProofResult {
+  tx_hash: string;
+  proof_type: "anchor_contract" | "legacy_signed_payload";
+  proof_valid: boolean;
+  chain_id: number | null;
+  block_number: number | null;
+  from_address: string | null;
+  to_address: string | null;
+  explorer_url: string | null;
+  receipt_id: string | null;
+  receipt_id_hash: string | null;
+  receipt_hash: string | null;
+  asset_hash: string | null;
+  storage_uri: string | null;
+  signer_address: string | null;
+  submitter_address: string | null;
+  signature: string | null;
+  public_key: string | null;
+  signature_valid: boolean | null;
+  public_key_matches: boolean | null;
+  record_found: boolean;
+  record_consistent: boolean | null;
+  provided_asset_hash: string | null;
+  asset_hash_matches: boolean | null;
+}
+
 export interface VerifiedReceipt {
   canonicalMessage: string;
   recoveredAddress: string;

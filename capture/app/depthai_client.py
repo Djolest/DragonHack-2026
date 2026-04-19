@@ -7,7 +7,7 @@ try:
 except ImportError:  # pragma: no cover - hardware dependency
     dai = None
 
-from .models import CaptureRequest
+from .models import StartCaptureSessionRequest as CaptureRequest
 
 
 class DepthAIUnavailableError(RuntimeError):
