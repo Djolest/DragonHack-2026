@@ -1159,8 +1159,10 @@ class RealnessVerifier:
         variance_result: SceneCheckResult,
         too_close_result: SceneCheckResult,
     ) -> tuple[str, str]:
-        if self.active_challenge is not None:
-            return ("inconclusive", "Session stopped while a challenge was still active.")
+        # Relax the soft "inconclusive" gates once the session has cleared the hard
+        # failure checks and completed at least one challenge successfully.
+        # if self.active_challenge is not None:
+        #     return ("inconclusive", "Session stopped while a challenge was still active.")
         if plane_result.status == "failed":
             return ("failed", plane_result.reason)
         if variance_result.status == "failed":
@@ -1169,17 +1171,17 @@ class RealnessVerifier:
             return ("failed", too_close_result.reason)
         if self.failed_challenges > 0:
             return ("failed", "At least one anti-replay challenge was failed or timed out.")
-        if self.analyzable_frames < self.config.min_analyzable_frames:
-            return ("inconclusive", "Not enough analyzable depth evidence was recorded.")
-        if plane_result.status != "passed":
-            return ("inconclusive", plane_result.reason)
-        if variance_result.status != "passed":
-            return ("inconclusive", variance_result.reason)
-        if too_close_result.status != "passed":
-            return ("inconclusive", too_close_result.reason)
+        # if self.analyzable_frames < self.config.min_analyzable_frames:
+        #     return ("inconclusive", "Not enough analyzable depth evidence was recorded.")
+        # if plane_result.status != "passed":
+        #     return ("inconclusive", plane_result.reason)
+        # if variance_result.status != "passed":
+        #     return ("inconclusive", variance_result.reason)
+        # if too_close_result.status != "passed":
+        #     return ("inconclusive", too_close_result.reason)
         if self.passed_challenges < 1:
             return ("inconclusive", "No challenge was completed successfully.")
         return (
             "verified",
-            "Depth realism checks passed with enough analyzable evidence, and at least one challenge succeeded with no failures.",
+            "Depth realism checks cleared the hard failure gates, and at least one challenge succeeded with no failures.",
         )

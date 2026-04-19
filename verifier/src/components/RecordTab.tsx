@@ -65,8 +65,10 @@ interface RecordTabProps {
 }
 
 const RGB_PREVIEW_WIDTH = 960;
-const RGB_PREVIEW_QUALITY = 72;
-const RGB_PREVIEW_FPS = 14;
+const RGB_PREVIEW_QUALITY = 64;
+const RGB_PREVIEW_FPS = 18;
+const RGB_SNAPSHOT_ACTIVE_DELAY_MS = 90;
+const RGB_SNAPSHOT_IDLE_DELAY_MS = 1600;
 const DEPTH_PREVIEW_WIDTH = 360;
 const DEPTH_PREVIEW_QUALITY = 55;
 
@@ -79,7 +81,7 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
   const [actionState, setActionState] = useState<"idle" | "starting" | "stopping">("idle");
   const [recordError, setRecordError] = useState<string | null>(null);
   const [rgbPreviewMode, setRgbPreviewMode] = useState<"stream" | "snapshot">("stream");
-  const [rgbPreviewNonce, setRgbPreviewNonce] = useState(() => Date.now());
+  const [rgbSnapshotDisplayUrl, setRgbSnapshotDisplayUrl] = useState<string | null>(null);
   const [depthPreviewNonce, setDepthPreviewNonce] = useState(() => Date.now());
   const [showDepthPreview, setShowDepthPreview] = useState(false);
 
@@ -102,14 +104,8 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
       })
       : null;
   const rgbSnapshotPreviewUrl =
-    session?.session_id
-      ? buildCapturePreviewUrl(captureUrl, session.session_id, "rgb", {
-        cacheBust: rgbPreviewNonce,
-        width: RGB_PREVIEW_WIDTH,
-        quality: RGB_PREVIEW_QUALITY
-      })
-      : null;
-  const previewUrl = rgbPreviewMode === "snapshot" ? rgbSnapshotPreviewUrl : rgbStreamPreviewUrl;
+    rgbPreviewMode === "snapshot" ? rgbSnapshotDisplayUrl : rgbStreamPreviewUrl;
+  const previewUrl = rgbSnapshotPreviewUrl;
   const depthPreviewUrl =
     showDepthPreview && session?.session_id
       ? buildCapturePreviewUrl(captureUrl, session.session_id, "depth", {
@@ -128,7 +124,7 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
 
   useEffect(() => {
     setRgbPreviewMode("stream");
-    setRgbPreviewNonce(Date.now());
+    setRgbSnapshotDisplayUrl(null);
     setDepthPreviewNonce(Date.now());
     setShowDepthPreview(false);
   }, [session?.session_id]);
@@ -172,14 +168,48 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
       return;
     }
 
-    const snapshotIntervalId = window.setInterval(() => {
-      setRgbPreviewNonce(Date.now());
-    }, sessionActive ? 160 : 1800);
+    let cancelled = false;
+    let timeoutId: number | null = null;
+
+    const loadSnapshot = () => {
+      const nextUrl = buildCapturePreviewUrl(captureUrl, session.session_id, "rgb", {
+        cacheBust: Date.now(),
+        width: RGB_PREVIEW_WIDTH,
+        quality: RGB_PREVIEW_QUALITY
+      });
+      const preloadedImage = new Image();
+      preloadedImage.decoding = "async";
+      preloadedImage.onload = () => {
+        if (cancelled) {
+          return;
+        }
+        setRgbSnapshotDisplayUrl(nextUrl);
+        timeoutId = window.setTimeout(
+          loadSnapshot,
+          sessionActive ? RGB_SNAPSHOT_ACTIVE_DELAY_MS : RGB_SNAPSHOT_IDLE_DELAY_MS
+        );
+      };
+      preloadedImage.onerror = () => {
+        if (cancelled) {
+          return;
+        }
+        timeoutId = window.setTimeout(
+          loadSnapshot,
+          sessionActive ? 240 : 2000
+        );
+      };
+      preloadedImage.src = nextUrl;
+    };
+
+    loadSnapshot();
 
     return () => {
-      window.clearInterval(snapshotIntervalId);
+      cancelled = true;
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
     };
-  }, [rgbPreviewMode, session?.session_id, sessionActive]);
+  }, [captureUrl, rgbPreviewMode, session?.session_id, sessionActive]);
 
   useEffect(() => {
     if (!session?.session_id || !showDepthPreview) {
@@ -292,12 +322,12 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
                 className="station-preview-image"
                 src={previewUrl}
                 alt="Live OAK station preview"
+                decoding="async"
                 fetchPriority="high"
-                key={previewUrl}
+                key={session ? `${session.session_id}-${rgbPreviewMode}` : rgbPreviewMode}
                 onError={() => {
                   if (rgbPreviewMode === "stream") {
                     setRgbPreviewMode("snapshot");
-                    setRgbPreviewNonce(Date.now());
                   }
                 }}
               />
