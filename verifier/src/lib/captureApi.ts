@@ -4,6 +4,13 @@ import type {
   StopCaptureSessionResponse
 } from "../types";
 
+interface CapturePreviewOptions {
+  cacheBust?: number;
+  width?: number;
+  height?: number;
+  quality?: number;
+}
+
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, "");
 }
@@ -68,13 +75,22 @@ export function buildCapturePreviewUrl(
   baseUrl: string,
   sessionId: string,
   kind: "rgb" | "depth",
-  cacheBust?: number
+  options: CapturePreviewOptions = {}
 ): string {
   const url = new URL(
     `${normalizeBaseUrl(baseUrl)}/api/v1/capture/sessions/${encodeURIComponent(sessionId)}/preview/${kind}.jpg`
   );
-  if (cacheBust) {
-    url.searchParams.set("t", String(cacheBust));
+  if (options.cacheBust) {
+    url.searchParams.set("t", String(options.cacheBust));
+  }
+  if (options.width) {
+    url.searchParams.set("width", String(options.width));
+  }
+  if (options.height) {
+    url.searchParams.set("height", String(options.height));
+  }
+  if (options.quality) {
+    url.searchParams.set("quality", String(options.quality));
   }
   return url.toString();
 }
