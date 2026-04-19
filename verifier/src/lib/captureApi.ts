@@ -9,6 +9,7 @@ interface CapturePreviewOptions {
   width?: number;
   height?: number;
   quality?: number;
+  fps?: number;
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -71,15 +72,7 @@ export async function stopCaptureSession(
   return payload.session;
 }
 
-export function buildCapturePreviewUrl(
-  baseUrl: string,
-  sessionId: string,
-  kind: "rgb" | "depth",
-  options: CapturePreviewOptions = {}
-): string {
-  const url = new URL(
-    `${normalizeBaseUrl(baseUrl)}/api/v1/capture/sessions/${encodeURIComponent(sessionId)}/preview/${kind}.jpg`
-  );
+function applyCapturePreviewOptions(url: URL, options: CapturePreviewOptions): void {
   if (options.cacheBust) {
     url.searchParams.set("t", String(options.cacheBust));
   }
@@ -92,6 +85,33 @@ export function buildCapturePreviewUrl(
   if (options.quality) {
     url.searchParams.set("quality", String(options.quality));
   }
+  if (options.fps) {
+    url.searchParams.set("fps", String(options.fps));
+  }
+}
+
+export function buildCapturePreviewUrl(
+  baseUrl: string,
+  sessionId: string,
+  kind: "rgb" | "depth",
+  options: CapturePreviewOptions = {}
+): string {
+  const url = new URL(
+    `${normalizeBaseUrl(baseUrl)}/api/v1/capture/sessions/${encodeURIComponent(sessionId)}/preview/${kind}.jpg`
+  );
+  applyCapturePreviewOptions(url, options);
+  return url.toString();
+}
+
+export function buildCapturePreviewStreamUrl(
+  baseUrl: string,
+  sessionId: string,
+  options: CapturePreviewOptions = {}
+): string {
+  const url = new URL(
+    `${normalizeBaseUrl(baseUrl)}/api/v1/capture/sessions/${encodeURIComponent(sessionId)}/preview/rgb.mjpeg`
+  );
+  applyCapturePreviewOptions(url, options);
   return url.toString();
 }
 

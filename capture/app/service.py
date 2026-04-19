@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import threading
 from copy import deepcopy
+from typing import Iterator
 
 from .config import Settings
 from .depth_challenge import load_verification_config
 from .models import CaptureSessionArtifacts, CaptureSessionStatus, StartCaptureSessionRequest
 from .receipt_workflow import ReceiptWorkflow
 from .oak4_engine import Oak4RuntimeConfig
-from .preview import SessionPreviewRegistry
+from .preview import (
+    DEFAULT_DEPTH_PREVIEW_QUALITY,
+    DEFAULT_DEPTH_PREVIEW_WIDTH,
+    DEFAULT_RGB_PREVIEW_QUALITY,
+    DEFAULT_RGB_PREVIEW_WIDTH,
+    SessionPreviewRegistry,
+)
 from .session_runtime import CaptureSessionManager, SessionArtifacts
 from .storage import LocalStorage
 
@@ -64,9 +71,9 @@ class CaptureService:
         self,
         session_id: str,
         *,
-        width: int | None = None,
+        width: int | None = DEFAULT_RGB_PREVIEW_WIDTH,
         height: int | None = None,
-        quality: int = 90,
+        quality: int = DEFAULT_RGB_PREVIEW_QUALITY,
     ) -> bytes:
         self.manager.get_session(session_id)
         return self.preview_registry.latest_rgb_jpeg(
@@ -76,13 +83,31 @@ class CaptureService:
             quality=quality,
         )
 
+    def stream_session_rgb_preview_mjpeg(
+        self,
+        session_id: str,
+        *,
+        width: int | None = DEFAULT_RGB_PREVIEW_WIDTH,
+        height: int | None = None,
+        quality: int = DEFAULT_RGB_PREVIEW_QUALITY,
+        fps: float = 12.0,
+    ) -> Iterator[bytes]:
+        self.manager.get_session(session_id)
+        return self.preview_registry.iter_rgb_mjpeg(
+            session_id,
+            width=width,
+            height=height,
+            quality=quality,
+            fps=fps,
+        )
+
     def get_session_depth_preview_jpeg(
         self,
         session_id: str,
         *,
-        width: int | None = None,
+        width: int | None = DEFAULT_DEPTH_PREVIEW_WIDTH,
         height: int | None = None,
-        quality: int = 90,
+        quality: int = DEFAULT_DEPTH_PREVIEW_QUALITY,
     ) -> bytes:
         self.manager.get_session(session_id)
         return self.preview_registry.latest_depth_jpeg(

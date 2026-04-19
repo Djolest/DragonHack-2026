@@ -176,7 +176,9 @@ def make_client(
         frame_source_factory=lambda _simulate, _session_id: ScriptedFrameSource(frames),
         observer_factory=service.preview_registry.observer_for_session,
     )
-    return TestClient(create_app(settings=settings, service=service))
+    client = TestClient(create_app(settings=settings, service=service))
+    client.app.state.capture_service = service
+    return client
 
 
 def make_workspace_temp_path() -> Path:
@@ -430,6 +432,93 @@ def test_session_preview_rgb_endpoint_returns_latest_jpeg_frame() -> None:
             )
         )
         assert response.content != placeholder_bytes
+
+        service = client.app.state.capture_service
+        cached_preview = service.preview_registry.latest_cached_preview(session_id)
+        assert cached_preview is not None
+        default_response = client.get(f"/api/v1/capture/sessions/{session_id}/preview/rgb.jpg")
+        assert default_response.status_code == 200
+        assert default_response.content == cached_preview.rgb_jpeg
+    finally:
+        shutil.rmtree(tmp_path, ignore_errors=True)
+
+
+def test_session_preview_depth_endpoint_returns_cached_default_jpeg() -> None:
+    tmp_path = make_workspace_temp_path()
+    try:
+        client = make_client(
+            tmp_path,
+            verification_config=build_config(
+                challenge_schedule_min_seconds=50.0,
+                challenge_schedule_max_seconds=50.0,
+            ),
+            frames=build_frames(
+                [
+                    non_planar_depth(980.0),
+                    non_planar_depth(930.0),
+                    non_planar_depth(860.0),
+                    non_planar_depth(760.0),
+                ]
+            ),
+        )
+
+        start_response = client.post("/api/v1/capture/sessions", json={"asset_id": "asset-depth-preview"})
+        assert start_response.status_code == 200
+        session_id = start_response.json()["session_id"]
+
+        terminal_payload = wait_for_terminal_state(client, session_id)
+        assert terminal_payload["state"] == "stopped"
+
+        service = client.app.state.capture_service
+        cached_preview = service.preview_registry.latest_cached_preview(session_id)
+        assert cached_preview is not None
+
+        response = client.get(f"/api/v1/capture/sessions/{session_id}/preview/depth.jpg")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/jpeg"
+        assert response.content == cached_preview.depth_jpeg
+    finally:
+        shutil.rmtree(tmp_path, ignore_errors=True)
+
+
+def test_session_preview_rgb_stream_generator_returns_mjpeg_chunks() -> None:
+    tmp_path = make_workspace_temp_path()
+    try:
+        client = make_client(
+            tmp_path,
+            verification_config=build_config(
+                challenge_schedule_min_seconds=50.0,
+                challenge_schedule_max_seconds=50.0,
+            ),
+            frames=build_frames(
+                [
+                    non_planar_depth(980.0),
+                    non_planar_depth(930.0),
+                    non_planar_depth(860.0),
+                    non_planar_depth(760.0),
+                ]
+            ),
+        )
+
+        start_response = client.post(
+            "/api/v1/capture/sessions",
+            json={"asset_id": "asset-preview-stream"},
+        )
+        assert start_response.status_code == 200
+        session_id = start_response.json()["session_id"]
+
+        terminal_payload = wait_for_terminal_state(client, session_id)
+        assert terminal_payload["state"] == "stopped"
+        service = client.app.state.capture_service
+        stream = service.stream_session_rgb_preview_mjpeg(
+            session_id,
+            fps=8.0,
+        )
+        first_chunk = next(stream)
+        cached_preview = service.preview_registry.latest_cached_preview(session_id)
+        assert cached_preview is not None
+        assert b"Content-Type: image/jpeg" in first_chunk
+        assert cached_preview.rgb_jpeg in first_chunk
     finally:
         shutil.rmtree(tmp_path, ignore_errors=True)
 

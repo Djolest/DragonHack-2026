@@ -21,8 +21,8 @@ import type {
   VerifiedReceipt
 } from "./types";
 
-const defaultBackendUrl = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:8000";
-const defaultCaptureUrl = import.meta.env.VITE_CAPTURE_URL ?? "http://127.0.0.1:8100";
+const defaultBackendUrl = "http://127.0.0.1:8000";
+const defaultCaptureUrl = "http://127.0.0.1:8100";
 
 type ActiveAction = "transaction" | "fetch" | "analyze" | "anchor" | null;
 type TabId = "record" | "verify" | "about";
@@ -73,8 +73,6 @@ function clipMiddle(value: string | null | undefined, edge = 10): string {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>("record");
-  const [backendUrl, setBackendUrl] = useState(defaultBackendUrl);
-  const [captureUrl, setCaptureUrl] = useState(defaultCaptureUrl);
   const [receiptId, setReceiptId] = useState("");
   const [receiptText, setReceiptText] = useState("");
   const [transactionHash, setTransactionHash] = useState("");
@@ -89,6 +87,21 @@ export default function App() {
   const [activeAction, setActiveAction] = useState<ActiveAction>(null);
   const [error, setError] = useState<string | null>(null);
   const [isProofCardOpen, setIsProofCardOpen] = useState(false);
+  const [isHeaderCompact, setIsHeaderCompact] = useState(false);
+  const backendUrl = defaultBackendUrl;
+  const captureUrl = defaultCaptureUrl;
+
+  useEffect(() => {
+    const updateHeaderState = () => {
+      setIsHeaderCompact(window.scrollY > 56);
+    };
+
+    updateHeaderState();
+    window.addEventListener("scroll", updateHeaderState, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", updateHeaderState);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -301,16 +314,15 @@ export default function App() {
   return (
     <div className="app-root">
       <div className="app-shell">
-        <header className="glass-panel app-header">
+        <header className={`glass-panel app-header${isHeaderCompact ? " is-compact" : ""}`}>
           <div className="brand-lockup">
-            <p className="brand-kicker">DragonHack MVP</p>
+            <p className="brand-kicker">Live OAK station + verifier</p>
             <div className="brand-title-row">
               <h1>OAKProof</h1>
-              <span className="brand-pill">single web app</span>
+              <span className="brand-pill">web console</span>
             </div>
             <p className="brand-copy">
-              One browser app for station control and proof verification, backed by the capture
-              service on one side and the receipt or anchor service on the other.
+              Live capture and receipt verification in one browser app.
             </p>
           </div>
 
@@ -327,25 +339,7 @@ export default function App() {
             ))}
           </nav>
 
-          <div className="header-controls">
-            <label className="header-field">
-              <span>Receipt API</span>
-              <input
-                value={backendUrl}
-                onChange={(event) => setBackendUrl(event.target.value)}
-                placeholder="http://127.0.0.1:8000"
-              />
-            </label>
-
-            <label className="header-field">
-              <span>Station API</span>
-              <input
-                value={captureUrl}
-                onChange={(event) => setCaptureUrl(event.target.value)}
-                placeholder="http://127.0.0.1:8100"
-              />
-            </label>
-
+          <div className="header-actions">
             <button
               type="button"
               className="secondary-button"

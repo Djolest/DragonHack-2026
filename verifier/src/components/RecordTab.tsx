@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import {
+  buildCapturePreviewStreamUrl,
   buildCapturePreviewUrl,
   fetchCaptureSession,
   isCaptureSessionTerminal,
@@ -63,6 +64,12 @@ interface RecordTabProps {
   onReceiptIdReady: (receiptId: string) => void;
 }
 
+const RGB_PREVIEW_WIDTH = 960;
+const RGB_PREVIEW_QUALITY = 72;
+const RGB_PREVIEW_FPS = 14;
+const DEPTH_PREVIEW_WIDTH = 360;
+const DEPTH_PREVIEW_QUALITY = 55;
+
 export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: RecordTabProps) {
   const [assetId, setAssetId] = useState("demo-batch-001");
   const [operatorId, setOperatorId] = useState("");
@@ -71,7 +78,10 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
   const [session, setSession] = useState<CaptureSessionStatus | null>(null);
   const [actionState, setActionState] = useState<"idle" | "starting" | "stopping">("idle");
   const [recordError, setRecordError] = useState<string | null>(null);
-  const [previewNonce, setPreviewNonce] = useState(() => Date.now());
+  const [rgbPreviewMode, setRgbPreviewMode] = useState<"stream" | "snapshot">("stream");
+  const [rgbPreviewNonce, setRgbPreviewNonce] = useState(() => Date.now());
+  const [depthPreviewNonce, setDepthPreviewNonce] = useState(() => Date.now());
+  const [showDepthPreview, setShowDepthPreview] = useState(false);
 
   const sessionActive =
     session !== null &&
@@ -82,13 +92,31 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
   const currentAnchorTxHash = session?.proof_summary?.receipt_workflow?.anchor_tx_hash ?? null;
   const liveState = session?.live_state ?? null;
   const deviceInfo = session?.device_info ?? null;
-  const previewUrl =
+  const rgbStreamPreviewUrl =
     session?.session_id
-      ? buildCapturePreviewUrl(captureUrl, session.session_id, "rgb", previewNonce)
+      ? buildCapturePreviewStreamUrl(captureUrl, session.session_id, {
+        cacheBust: Date.parse(session.started_at),
+        width: RGB_PREVIEW_WIDTH,
+        quality: RGB_PREVIEW_QUALITY,
+        fps: RGB_PREVIEW_FPS
+      })
       : null;
-  const depthPreviewUrl =
+  const rgbSnapshotPreviewUrl =
     session?.session_id
-      ? buildCapturePreviewUrl(captureUrl, session.session_id, "depth", previewNonce)
+      ? buildCapturePreviewUrl(captureUrl, session.session_id, "rgb", {
+        cacheBust: rgbPreviewNonce,
+        width: RGB_PREVIEW_WIDTH,
+        quality: RGB_PREVIEW_QUALITY
+      })
+      : null;
+  const previewUrl = rgbPreviewMode === "snapshot" ? rgbSnapshotPreviewUrl : rgbStreamPreviewUrl;
+  const depthPreviewUrl =
+    showDepthPreview && session?.session_id
+      ? buildCapturePreviewUrl(captureUrl, session.session_id, "depth", {
+        cacheBust: depthPreviewNonce,
+        width: DEPTH_PREVIEW_WIDTH,
+        quality: DEPTH_PREVIEW_QUALITY
+      })
       : null;
 
   useEffect(() => {
@@ -97,6 +125,13 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
     }
     onReceiptIdReady(currentReceiptId);
   }, [currentReceiptId, onReceiptIdReady]);
+
+  useEffect(() => {
+    setRgbPreviewMode("stream");
+    setRgbPreviewNonce(Date.now());
+    setDepthPreviewNonce(Date.now());
+    setShowDepthPreview(false);
+  }, [session?.session_id]);
 
   useEffect(() => {
     if (!session?.session_id || !sessionActive) {
@@ -133,18 +168,32 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
   }, [captureUrl, onReceiptIdReady, session?.session_id, sessionActive]);
 
   useEffect(() => {
-    if (!session?.session_id) {
+    if (!session?.session_id || rgbPreviewMode !== "snapshot") {
       return;
     }
 
-    const intervalId = window.setInterval(() => {
-      setPreviewNonce(Date.now());
-    }, sessionActive ? 900 : 4000);
+    const snapshotIntervalId = window.setInterval(() => {
+      setRgbPreviewNonce(Date.now());
+    }, sessionActive ? 160 : 1800);
 
     return () => {
-      window.clearInterval(intervalId);
+      window.clearInterval(snapshotIntervalId);
     };
-  }, [session?.session_id, sessionActive]);
+  }, [rgbPreviewMode, session?.session_id, sessionActive]);
+
+  useEffect(() => {
+    if (!session?.session_id || !showDepthPreview) {
+      return;
+    }
+
+    const depthIntervalId = window.setInterval(() => {
+      setDepthPreviewNonce(Date.now());
+    }, sessionActive ? 1200 : 3200);
+
+    return () => {
+      window.clearInterval(depthIntervalId);
+    };
+  }, [session?.session_id, sessionActive, showDepthPreview]);
 
   async function handleStart(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -164,7 +213,7 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
         simulate: false
       });
       setSession(nextSession);
-      setPreviewNonce(Date.now());
+      setDepthPreviewNonce(Date.now());
     } catch (caughtError) {
       setRecordError(
         caughtError instanceof Error ? caughtError.message : "Failed to start capture session."
@@ -188,7 +237,7 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
       if (nextSession.proof_summary?.receipt_workflow?.receipt_id) {
         onReceiptIdReady(nextSession.proof_summary.receipt_workflow.receipt_id);
       }
-      setPreviewNonce(Date.now());
+      setDepthPreviewNonce(Date.now());
     } catch (caughtError) {
       setRecordError(
         caughtError instanceof Error ? caughtError.message : "Failed to stop capture session."
@@ -239,7 +288,19 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
 
           <div className="station-preview-shell">
             {previewUrl ? (
-              <img className="station-preview-image" src={previewUrl} alt="Latest OAK station preview" />
+              <img
+                className="station-preview-image"
+                src={previewUrl}
+                alt="Live OAK station preview"
+                fetchPriority="high"
+                key={previewUrl}
+                onError={() => {
+                  if (rgbPreviewMode === "stream") {
+                    setRgbPreviewMode("snapshot");
+                    setRgbPreviewNonce(Date.now());
+                  }
+                }}
+              />
             ) : (
               <div className="station-preview-placeholder">
                 <span className="preview-badge">station console</span>
@@ -247,25 +308,56 @@ export function RecordTab({ captureUrl, onOpenProofCard, onReceiptIdReady }: Rec
                 <p>The browser drives the OAK station through the capture service and pulls annotated preview frames over plain HTTP.</p>
               </div>
             )}
+          </div>
 
-            <div className="station-preview-overlay">
-              <div className="station-instruction-card">
-                <p className="section-kicker">Challenge instruction</p>
-                <h3>{currentPrompt}</h3>
-                <p>
-                  {currentPauseReason
-                    ? `Pause reason: ${currentPauseReason}`
-                    : "No pause reason is active right now."}
-                </p>
-              </div>
-
-              {depthPreviewUrl ? (
-                <div className="depth-preview-card">
-                  <span>Aligned depth</span>
-                  <img src={depthPreviewUrl} alt="Latest aligned depth preview" />
-                </div>
-              ) : null}
+          <div className="station-preview-insights">
+            <div className="station-instruction-card">
+              <p className="section-kicker">Challenge instruction</p>
+              <h3>{currentPrompt}</h3>
+              <p>
+                {currentPauseReason
+                  ? `Pause reason: ${currentPauseReason}`
+                  : "No pause reason is active right now."}
+              </p>
             </div>
+
+            {depthPreviewUrl ? (
+              <div className="depth-preview-card">
+                <div className="depth-preview-header">
+                  <span>Aligned depth</span>
+                  <button
+                    type="button"
+                    className="secondary-button depth-preview-toggle is-active"
+                    onClick={() => setShowDepthPreview(false)}
+                  >
+                    Hide
+                  </button>
+                </div>
+                <img
+                  src={depthPreviewUrl}
+                  alt="Latest aligned depth preview"
+                  decoding="async"
+                  fetchPriority="low"
+                />
+              </div>
+            ) : (
+              <div className="depth-preview-card">
+                <div className="depth-preview-header">
+                  <span>Aligned depth</span>
+                  <button
+                    type="button"
+                    className="secondary-button depth-preview-toggle"
+                    onClick={() => setShowDepthPreview(true)}
+                    disabled={!session?.session_id}
+                  >
+                    Show
+                  </button>
+                </div>
+                <div className="depth-preview-placeholder">
+                  Depth stays off by default so the RGB preview can stay as responsive as possible.
+                </div>
+              </div>
+            )}
           </div>
         </article>
 

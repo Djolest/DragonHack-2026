@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import threading
+import time
 from dataclasses import dataclass
+from typing import Iterator
 
 import cv2
 import numpy as np
@@ -11,6 +13,12 @@ from .oak4_engine import DeviceSummary, Oak4RuntimeConfig, SyncedFrame, colorize
 
 
 JPEG_MEDIA_TYPE = "image/jpeg"
+MJPEG_BOUNDARY = "oakproofframe"
+MJPEG_MEDIA_TYPE = f"multipart/x-mixed-replace; boundary={MJPEG_BOUNDARY}"
+DEFAULT_RGB_PREVIEW_WIDTH = 960
+DEFAULT_RGB_PREVIEW_QUALITY = 72
+DEFAULT_DEPTH_PREVIEW_WIDTH = 360
+DEFAULT_DEPTH_PREVIEW_QUALITY = 55
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,10 +28,40 @@ class PreviewSnapshot:
     device_summary: DeviceSummary
 
 
+@dataclass(slots=True)
+class CachedPreviewFrame:
+    snapshot: PreviewSnapshot
+    rgb_frame: np.ndarray
+    rgb_jpeg: bytes
+    depth_frame: np.ndarray
+    depth_jpeg: bytes
+    version: int
+
+
 class PreviewFrameBuffer:
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._latest: PreviewSnapshot | None = None
+    def __init__(
+        self,
+        *,
+        preview_min_depth_mm: float = 100.0,
+        preview_max_depth_mm: float = 4000.0,
+        default_rgb_width: int | None = DEFAULT_RGB_PREVIEW_WIDTH,
+        default_rgb_height: int | None = None,
+        default_rgb_quality: int = DEFAULT_RGB_PREVIEW_QUALITY,
+        default_depth_width: int | None = DEFAULT_DEPTH_PREVIEW_WIDTH,
+        default_depth_height: int | None = None,
+        default_depth_quality: int = DEFAULT_DEPTH_PREVIEW_QUALITY,
+    ) -> None:
+        self.preview_min_depth_mm = preview_min_depth_mm
+        self.preview_max_depth_mm = preview_max_depth_mm
+        self.default_rgb_width = default_rgb_width
+        self.default_rgb_height = default_rgb_height
+        self.default_rgb_quality = default_rgb_quality
+        self.default_depth_width = default_depth_width
+        self.default_depth_height = default_depth_height
+        self.default_depth_quality = default_depth_quality
+        self._condition = threading.Condition()
+        self._latest: CachedPreviewFrame | None = None
+        self._version = 0
 
     def update(
         self,
@@ -40,12 +78,67 @@ class PreviewFrameBuffer:
             live_state=live_state,
             device_summary=device_summary,
         )
-        with self._lock:
-            self._latest = snapshot
+        rgb_frame = render_rgb_preview(snapshot)
+        depth_frame = render_depth_preview(
+            snapshot,
+            preview_min_depth_mm=self.preview_min_depth_mm,
+            preview_max_depth_mm=self.preview_max_depth_mm,
+        )
+        default_rgb_frame = resize_preview_frame(
+            rgb_frame,
+            width=self.default_rgb_width,
+            height=self.default_rgb_height,
+        )
+        default_depth_frame = resize_preview_frame(
+            depth_frame,
+            width=self.default_depth_width,
+            height=self.default_depth_height,
+        )
+        rgb_jpeg = encode_jpeg(default_rgb_frame, quality=self.default_rgb_quality)
+        depth_jpeg = encode_jpeg(default_depth_frame, quality=self.default_depth_quality)
+
+        with self._condition:
+            self._version += 1
+            self._latest = CachedPreviewFrame(
+                snapshot=snapshot,
+                rgb_frame=rgb_frame,
+                rgb_jpeg=rgb_jpeg,
+                depth_frame=depth_frame,
+                depth_jpeg=depth_jpeg,
+                version=self._version,
+            )
+            self._condition.notify_all()
 
     def latest(self) -> PreviewSnapshot | None:
-        with self._lock:
+        with self._condition:
+            latest = self._latest
+            return latest.snapshot if latest is not None else None
+
+    def latest_cached(self) -> CachedPreviewFrame | None:
+        with self._condition:
             return self._latest
+
+    def wait_for_newer(
+        self,
+        last_version: int,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> CachedPreviewFrame | None:
+        deadline = (
+            None if timeout_seconds is None else time.monotonic() + max(0.0, timeout_seconds)
+        )
+        with self._condition:
+            while True:
+                latest = self._latest
+                if latest is not None and latest.version > last_version:
+                    return latest
+                if deadline is not None:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0.0:
+                        return None
+                    self._condition.wait(timeout=remaining)
+                else:
+                    self._condition.wait()
 
 
 class FrameBufferingPreviewObserver:
@@ -260,6 +353,15 @@ def encode_jpeg(frame: np.ndarray, *, quality: int = 90) -> bytes:
     return encoded.tobytes()
 
 
+def encode_mjpeg_chunk(jpeg_bytes: bytes, *, boundary: str = MJPEG_BOUNDARY) -> bytes:
+    header = (
+        f"--{boundary}\r\n"
+        f"Content-Type: {JPEG_MEDIA_TYPE}\r\n"
+        f"Content-Length: {len(jpeg_bytes)}\r\n\r\n"
+    ).encode("ascii")
+    return header + jpeg_bytes + b"\r\n"
+
+
 def resize_preview_frame(
     frame: np.ndarray,
     *,
@@ -289,6 +391,22 @@ def resize_preview_frame(
     return cv2.resize(frame, (resized_width, resized_height), interpolation=cv2.INTER_AREA)
 
 
+def uses_default_preview_request(
+    *,
+    width: int | None,
+    height: int | None,
+    quality: int,
+    default_width: int | None,
+    default_height: int | None,
+    default_quality: int,
+) -> bool:
+    return (
+        width == default_width
+        and height == default_height
+        and quality == default_quality
+    )
+
+
 class SessionPreviewRegistry:
     def __init__(
         self,
@@ -302,6 +420,12 @@ class SessionPreviewRegistry:
             4000.0,
             float(verification_config.scene_max_depth_mm) * 1.75,
         )
+        self.default_rgb_width = DEFAULT_RGB_PREVIEW_WIDTH
+        self.default_rgb_height: int | None = None
+        self.default_rgb_quality = DEFAULT_RGB_PREVIEW_QUALITY
+        self.default_depth_width = DEFAULT_DEPTH_PREVIEW_WIDTH
+        self.default_depth_height: int | None = None
+        self.default_depth_quality = DEFAULT_DEPTH_PREVIEW_QUALITY
         self._lock = threading.Lock()
         self._buffers: dict[str, PreviewFrameBuffer] = {}
 
@@ -312,46 +436,111 @@ class SessionPreviewRegistry:
         self,
         session_id: str,
         *,
-        width: int | None = None,
+        width: int | None = DEFAULT_RGB_PREVIEW_WIDTH,
         height: int | None = None,
-        quality: int = 90,
+        quality: int = DEFAULT_RGB_PREVIEW_QUALITY,
     ) -> bytes:
-        snapshot = self.latest_snapshot(session_id)
-        if snapshot is None:
-            frame = placeholder_frame(
-                width=self.runtime_config.rgb_size[0],
-                height=self.runtime_config.rgb_size[1],
+        cached = self.latest_cached_preview(session_id)
+        if cached is None:
+            return self._placeholder_jpeg(
                 title="Waiting For RGB Preview",
                 subtitle=f"Session {session_id} has not produced a frame yet.",
+                width=width,
+                height=height,
+                quality=quality,
             )
-        else:
-            frame = render_rgb_preview(snapshot)
-        frame = resize_preview_frame(frame, width=width, height=height)
+        if uses_default_preview_request(
+            width=width,
+            height=height,
+            quality=quality,
+            default_width=self.default_rgb_width,
+            default_height=self.default_rgb_height,
+            default_quality=self.default_rgb_quality,
+        ):
+            return cached.rgb_jpeg
+        frame = resize_preview_frame(cached.rgb_frame, width=width, height=height)
         return encode_jpeg(frame, quality=quality)
+
+    def iter_rgb_mjpeg(
+        self,
+        session_id: str,
+        *,
+        width: int | None = DEFAULT_RGB_PREVIEW_WIDTH,
+        height: int | None = None,
+        quality: int = DEFAULT_RGB_PREVIEW_QUALITY,
+        fps: float = 12.0,
+    ) -> Iterator[bytes]:
+        frame_interval_seconds = 1.0 / max(1.0, fps)
+        placeholder_bytes: bytes | None = None
+        last_version = -1
+        last_emit_seconds = 0.0
+
+        while True:
+            cached = self.wait_for_newer_preview(
+                session_id,
+                last_version,
+                timeout_seconds=frame_interval_seconds,
+            )
+            if cached is None:
+                if placeholder_bytes is None:
+                    placeholder_bytes = self._placeholder_jpeg(
+                        title="Waiting For RGB Preview",
+                        subtitle=f"Session {session_id} has not produced a frame yet.",
+                        width=width,
+                        height=height,
+                        quality=quality,
+                    )
+                if last_version < 0:
+                    yield encode_mjpeg_chunk(placeholder_bytes)
+                    last_emit_seconds = time.monotonic()
+                continue
+
+            if last_version >= 0:
+                elapsed_seconds = time.monotonic() - last_emit_seconds
+                if elapsed_seconds < frame_interval_seconds:
+                    time.sleep(frame_interval_seconds - elapsed_seconds)
+                    latest_cached = self.latest_cached_preview(session_id)
+                    if latest_cached is not None:
+                        cached = latest_cached
+
+            last_version = cached.version
+            yield encode_mjpeg_chunk(
+                self._rgb_jpeg_for_request(
+                    cached,
+                    width=width,
+                    height=height,
+                    quality=quality,
+                )
+            )
+            last_emit_seconds = time.monotonic()
 
     def latest_depth_jpeg(
         self,
         session_id: str,
         *,
-        width: int | None = None,
+        width: int | None = DEFAULT_DEPTH_PREVIEW_WIDTH,
         height: int | None = None,
-        quality: int = 90,
+        quality: int = DEFAULT_DEPTH_PREVIEW_QUALITY,
     ) -> bytes:
-        snapshot = self.latest_snapshot(session_id)
-        if snapshot is None:
-            frame = placeholder_frame(
-                width=self.runtime_config.rgb_size[0],
-                height=self.runtime_config.rgb_size[1],
+        cached = self.latest_cached_preview(session_id)
+        if cached is None:
+            return self._placeholder_jpeg(
                 title="Waiting For Depth Preview",
                 subtitle=f"Session {session_id} has not produced a frame yet.",
+                width=width,
+                height=height,
+                quality=quality,
             )
-        else:
-            frame = render_depth_preview(
-                snapshot,
-                preview_min_depth_mm=self.preview_min_depth_mm,
-                preview_max_depth_mm=self.preview_max_depth_mm,
-            )
-        frame = resize_preview_frame(frame, width=width, height=height)
+        if uses_default_preview_request(
+            width=width,
+            height=height,
+            quality=quality,
+            default_width=self.default_depth_width,
+            default_height=self.default_depth_height,
+            default_quality=self.default_depth_quality,
+        ):
+            return cached.depth_jpeg
+        frame = resize_preview_frame(cached.depth_frame, width=width, height=height)
         return encode_jpeg(frame, quality=quality)
 
     def latest_snapshot(self, session_id: str) -> PreviewSnapshot | None:
@@ -361,8 +550,77 @@ class SessionPreviewRegistry:
             return None
         return buffer.latest()
 
+    def latest_cached_preview(self, session_id: str) -> CachedPreviewFrame | None:
+        with self._lock:
+            buffer = self._buffers.get(session_id)
+        if buffer is None:
+            return None
+        return buffer.latest_cached()
+
+    def wait_for_newer_preview(
+        self,
+        session_id: str,
+        last_version: int,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> CachedPreviewFrame | None:
+        with self._lock:
+            buffer = self._buffers.get(session_id)
+        if buffer is None:
+            if timeout_seconds is not None:
+                time.sleep(max(0.0, timeout_seconds))
+            return None
+        return buffer.wait_for_newer(last_version, timeout_seconds=timeout_seconds)
+
     def _buffer_for_session(self, session_id: str) -> PreviewFrameBuffer:
         with self._lock:
             if session_id not in self._buffers:
-                self._buffers[session_id] = PreviewFrameBuffer()
+                self._buffers[session_id] = PreviewFrameBuffer(
+                    preview_min_depth_mm=self.preview_min_depth_mm,
+                    preview_max_depth_mm=self.preview_max_depth_mm,
+                    default_rgb_width=self.default_rgb_width,
+                    default_rgb_height=self.default_rgb_height,
+                    default_rgb_quality=self.default_rgb_quality,
+                    default_depth_width=self.default_depth_width,
+                    default_depth_height=self.default_depth_height,
+                    default_depth_quality=self.default_depth_quality,
+                )
             return self._buffers[session_id]
+
+    def _placeholder_jpeg(
+        self,
+        *,
+        title: str,
+        subtitle: str,
+        width: int | None,
+        height: int | None,
+        quality: int,
+    ) -> bytes:
+        frame = placeholder_frame(
+            width=self.runtime_config.rgb_size[0],
+            height=self.runtime_config.rgb_size[1],
+            title=title,
+            subtitle=subtitle,
+        )
+        frame = resize_preview_frame(frame, width=width, height=height)
+        return encode_jpeg(frame, quality=quality)
+
+    def _rgb_jpeg_for_request(
+        self,
+        cached: CachedPreviewFrame,
+        *,
+        width: int | None,
+        height: int | None,
+        quality: int,
+    ) -> bytes:
+        if uses_default_preview_request(
+            width=width,
+            height=height,
+            quality=quality,
+            default_width=self.default_rgb_width,
+            default_height=self.default_rgb_height,
+            default_quality=self.default_rgb_quality,
+        ):
+            return cached.rgb_jpeg
+        frame = resize_preview_frame(cached.rgb_frame, width=width, height=height)
+        return encode_jpeg(frame, quality=quality)

@@ -4,10 +4,17 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from .config import Settings, get_settings
 from .models import CaptureSessionStatus, StartCaptureSessionRequest, StopCaptureSessionResponse
+from .preview import (
+    DEFAULT_DEPTH_PREVIEW_QUALITY,
+    DEFAULT_DEPTH_PREVIEW_WIDTH,
+    DEFAULT_RGB_PREVIEW_QUALITY,
+    DEFAULT_RGB_PREVIEW_WIDTH,
+    MJPEG_MEDIA_TYPE,
+)
 from .service import CaptureService
 
 
@@ -77,9 +84,9 @@ def create_app(
     @app.get("/api/v1/capture/sessions/{session_id}/preview/rgb.jpg")
     async def get_capture_session_rgb_preview(
         session_id: str,
-        width: int | None = Query(default=None, ge=160, le=1600),
-        height: int | None = Query(default=None, ge=120, le=1200),
-        quality: int = Query(default=90, ge=40, le=95),
+        width: int | None = Query(default=DEFAULT_RGB_PREVIEW_WIDTH, ge=64, le=1600),
+        height: int | None = Query(default=None, ge=48, le=1200),
+        quality: int = Query(default=DEFAULT_RGB_PREVIEW_QUALITY, ge=40, le=95),
     ) -> Response:
         try:
             return Response(
@@ -96,12 +103,36 @@ def create_app(
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.get("/api/v1/capture/sessions/{session_id}/preview/rgb.mjpeg")
+    async def stream_capture_session_rgb_preview(
+        session_id: str,
+        width: int | None = Query(default=DEFAULT_RGB_PREVIEW_WIDTH, ge=64, le=1600),
+        height: int | None = Query(default=None, ge=48, le=1200),
+        quality: int = Query(default=DEFAULT_RGB_PREVIEW_QUALITY, ge=40, le=95),
+        fps: float = Query(default=12.0, ge=2.0, le=24.0),
+    ) -> StreamingResponse:
+        try:
+            return StreamingResponse(
+                resolved_service.stream_session_rgb_preview_mjpeg(
+                    session_id,
+                    width=width,
+                    height=height,
+                    quality=quality,
+                    fps=fps,
+                ),
+                media_type=MJPEG_MEDIA_TYPE,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Capture session not found.") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.get("/api/v1/capture/sessions/{session_id}/preview/depth.jpg")
     async def get_capture_session_depth_preview(
         session_id: str,
-        width: int | None = Query(default=None, ge=160, le=1200),
-        height: int | None = Query(default=None, ge=120, le=900),
-        quality: int = Query(default=88, ge=40, le=95),
+        width: int | None = Query(default=DEFAULT_DEPTH_PREVIEW_WIDTH, ge=64, le=1200),
+        height: int | None = Query(default=None, ge=48, le=900),
+        quality: int = Query(default=DEFAULT_DEPTH_PREVIEW_QUALITY, ge=40, le=95),
     ) -> Response:
         try:
             return Response(

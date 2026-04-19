@@ -1,0 +1,152 @@
+{
+  "analyzable_frames": 0,
+  "challenge_summary": {
+    "events": [],
+    "failed": 0,
+    "issued": 1,
+    "passed": 0
+  },
+  "device_info": {
+    "board_name": "SIM",
+    "board_revision": "SIM",
+    "camera_sensors": {
+      "CAM_A": "SIM",
+      "CAM_B": "SIM",
+      "CAM_C": "SIM"
+    },
+    "connected_sockets": [
+      "CAM_A",
+      "CAM_B",
+      "CAM_C"
+    ],
+    "device_id": "simulate",
+    "name": "sim-test",
+    "platform": "RVC4",
+    "product_name": "OAK4-SIM",
+    "state": "SIMULATED",
+    "usb_speed": "SIMULATED"
+  },
+  "failed_challenges": 0,
+  "frames_processed": 4,
+  "latest_live_state": {
+    "analyzable_frames": 0,
+    "challenges_failed": 0,
+    "challenges_issued": 1,
+    "challenges_passed": 0,
+    "current_challenge": {
+      "baseline_depth_mm": 760.0,
+      "challenge_id": 1,
+      "close_reason": null,
+      "elapsed_seconds": 1.0,
+      "issued_at_seconds": 0.0,
+      "max_forward_motion_mm": 0.0,
+      "motion_duration_seconds": 0.0,
+      "progress_frames": 0,
+      "prompt": "Step 4/4: place an object in the box and move it closer to the camera. Remaining motion: 90 mm.",
+      "roi": {
+        "x0": 67,
+        "x1": 107,
+        "y0": 47,
+        "y1": 87
+      },
+      "state": "active",
+      "timeout_seconds": 10.0,
+      "valid_frames": 1
+    },
+    "elapsed_seconds": 3.0,
+    "frame_index": 4,
+    "median_depth_spread_mm": null,
+    "next_challenge_eta_seconds": null,
+    "plane_like_ratio": null,
+    "prompt": "Step 4/4: place an object in the box and move it closer to the camera. Remaining motion: 90 mm.",
+    "recorded_duration_seconds": 0.0,
+    "recorded_frames": 0,
+    "recording_pause_reason": "Recording paused until the current challenge is completed.",
+    "recording_state": "paused",
+    "scene_stats": {
+      "analyzable": true,
+      "depth_spread_mm": 249.0,
+      "frame_index": 4,
+      "plane_fit_rms_mm": 88.15506596924922,
+      "too_close_pixel_ratio": 0.0,
+      "valid_depth_ratio": 1.0
+    },
+    "too_close_frame_ratio": 0.0,
+    "warning": "Recording paused until the current challenge is completed.",
+    "workflow_progress_frames": 0,
+    "workflow_stage": "challenge"
+  },
+  "overall_status": "inconclusive",
+  "passed_challenges": 0,
+  "pause_summary": {
+    "challenge": 1,
+    "depth_variance_check": 1,
+    "distance_check": 1,
+    "plane_fit_check": 1
+  },
+  "paused_frames": 4,
+  "receipt_workflow": {
+    "reason": "Depth realness checks did not finish in the verified state.",
+    "status": "skipped_unverified"
+  },
+  "recorded_duration_seconds": 0.0,
+  "recorded_frames": 0,
+  "scene_checks": {
+    "depth_variance": {
+      "frames_considered": 0,
+      "observed_value": null,
+      "reason": "Not enough full-scene depth frames for the depth-variance check.",
+      "status": "inconclusive",
+      "threshold": 120.0
+    },
+    "plane_like": {
+      "frames_considered": 0,
+      "observed_value": null,
+      "reason": "Not enough full-scene depth frames for the plane-like check.",
+      "status": "inconclusive",
+      "threshold": 0.75
+    },
+    "too_close": {
+      "frames_considered": 0,
+      "observed_value": 0.0,
+      "reason": "Not enough accepted recording frames were captured for the distance check.",
+      "status": "inconclusive",
+      "threshold": 0.3
+    }
+  },
+  "status_reason": "Session stopped while a challenge was still active.",
+  "thresholds": {
+    "challenge_center_safe_height_fraction": 0.5,
+    "challenge_center_safe_width_fraction": 0.5,
+    "challenge_min_forward_motion_mm": 90.0,
+    "challenge_min_motion_duration_seconds": 1.0,
+    "challenge_min_progress_frames_for_pass": 2,
+    "challenge_min_progress_step_mm": 8.0,
+    "challenge_min_valid_depth_ratio": 0.35,
+    "challenge_min_valid_frames_for_pass": 3,
+    "challenge_roi_height_fraction": 0.24,
+    "challenge_roi_width_fraction": 0.22,
+    "challenge_schedule_max_seconds": 50.0,
+    "challenge_schedule_min_seconds": 50.0,
+    "challenge_timeout_seconds": 10.0,
+    "depth_spread_high_percentile": 95.0,
+    "depth_spread_low_percentile": 5.0,
+    "flat_scene_min_valid_depth_ratio": 0.55,
+    "max_planar_frame_ratio": 0.75,
+    "max_planar_plane_fit_rms_mm": 18.0,
+    "max_plane_fit_points": 3000,
+    "max_too_close_frame_ratio": 0.3,
+    "min_analyzable_frames": 5,
+    "min_depth_spread_mm": 120.0,
+    "plane_fit_min_points": 200,
+    "post_challenge_resume_delay_seconds": 1.5,
+    "recording_pause_confirmation_frames": 2,
+    "reliable_depth_floor_mm": 220,
+    "scene_max_depth_mm": 2200,
+    "scene_min_depth_mm": 180,
+    "scene_min_valid_depth_ratio": 0.2,
+    "scene_sampling_stride": 1,
+    "too_close_pixel_ratio": 0.08,
+    "workflow_confirmation_frames": 2
+  }
+}
